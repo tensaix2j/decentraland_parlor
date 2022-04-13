@@ -1,0 +1,49 @@
+{
+  "display": {
+    "title": "TensaiStudio Mahjong Parlor",
+    "description": "Mahjong Parlor",
+    "favicon": "favicon_asset",
+    "navmapThumbnail": "images/thumbnail.png"
+  },
+  "contact": {
+    "name": "tensaix2j",
+    "email": "tensaix2j@gmail.com"
+  },
+  "owner": "tensaix2j",
+  "scene": {
+    "parcels": [
+      "60,32","61,32","62,32","63,32",
+      "60,31","61,31","62,31","63,31"
+    ],
+    "base": "60,32"
+  },
+  "communications": {
+    "type": "webrtc",
+    "signalling": "https://signalling-01.decentraland.org"
+  },
+  "policy": {
+    "contentRating": "E",
+    "fly": true,
+    "voiceEnabled": true,
+    "blacklist": []
+  },
+  "requiredPermissions": [],
+  "main": "bin/game.js",
+  "tags": [],
+  "spawnPoints": [
+    {
+      "name": "spawn1",
+      "default": true,
+      "position": {
+        "x": 8,
+        "y": 0.5,
+        "z": 2
+      },
+      "cameraTarget": {
+        "x": 8,
+        "y": 0.5,
+        "z": 8
+      }
+    }
+  ]
+}
