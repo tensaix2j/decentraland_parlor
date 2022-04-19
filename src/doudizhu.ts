@@ -621,8 +621,23 @@ export class Doudizhu extends Entity implements ISystem {
         }))
         buttonGroup.addComponent( new Billboard() );
         
+
+        let helpButton = new Txclickable_box(
+            "How to Play",
+            "help",
+            new Transform({
+                position: new Vector3( 0, 1.65, 0),
+                scale: new Vector3(1,1,1)
+            }),
+            buttonGroup,
+            this,
+            this.materials[3]
+        )
+        this.buttons["help"] = helpButton;
+
+
         let dealButton = new Txclickable_box(
-            "Play",
+            "Start",
             "deal",
             new Transform({
                 position: new Vector3( 0, 0, 0),
@@ -723,9 +738,9 @@ export class Doudizhu extends Entity implements ISystem {
 		ui_network_msg.positionY = -310;
 		
         if ( this.game_mode == 0 ) {
-            ui_network_msg.value = "Player vs A.I Mode.";
+            ui_network_msg.value = "Card Game: Landlord vs Farmers: Player vs A.I Mode.";
         } else {
-            ui_network_msg.value = "Player v Player Mode. Table: " + (this.table_index + 1);
+            ui_network_msg.value = "Card Game: Landlord vs Farmers: Player v Player Mode. Table: " + (this.table_index + 1);
         }
 
 		ui_network_msg.fontSize = 15;
@@ -1611,11 +1626,17 @@ export class Doudizhu extends Entity implements ISystem {
             scale: new Vector3(0.08 , 0.08, 0.08 )
         }))
 
+        
 
         this.createMaterials();
         this.createButtons();
         this.createUI();
         
+        // Not lazy load for vs AI in constructor
+        if ( this.cards_entity_created == 0 && this.game_mode == 0 ) {
+            this.createCardPieces();
+            this.cards_entity_created = 1;
+        }
     }
 
     //-----
@@ -2203,7 +2224,9 @@ export class Doudizhu extends Entity implements ISystem {
         
         if ( id == "deal") {
             this.new_round();
-        } 
+        } else if ( id == "help") {
+            openExternalURL("https://www.youtube.com/watch?v=HOWevyidlXk");
+        }
     }
     
 

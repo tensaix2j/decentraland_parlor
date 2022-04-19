@@ -352,10 +352,22 @@ export class Mahjong extends Entity implements ISystem {
         buttonGroup.addComponent( new Billboard() );
         
 
+        let helpButton = new Txclickable_box(
+            "How to Play",
+            "help",
+            new Transform({
+                position: new Vector3( 0, 1.65, 0),
+                scale: new Vector3(1,1,1)
+            }),
+            buttonGroup,
+            this,
+            this.materials[3]
+        )
+        this.buttons["help"] = helpButton;
         
 
         let dealButton = new Txclickable_box(
-            "Play",
+            "Start",
             "deal",
             new Transform({
                 position: new Vector3( 0, 0, 0),
@@ -370,8 +382,11 @@ export class Mahjong extends Entity implements ISystem {
 
 
         if ( this.game_mode == 1 ) {
+
+
+
             let connectButton = new Txclickable_box(
-                "Connect",
+                "Join Public Room",
                 "connect",
                 new Transform({
                     position: new Vector3( 0, 0, 0),
@@ -382,7 +397,24 @@ export class Mahjong extends Entity implements ISystem {
                 this.materials[3]
             )
             this.buttons["connect"] = connectButton; 
-            this.buttons["deal"].hide();
+            
+            
+            connectButton = new Txclickable_box(
+                "Join Private Room",
+                "connect2",
+                new Transform({
+                    position: new Vector3( 0, -1.65, 0),
+                    scale: new Vector3(1,1,1)
+                }),
+                buttonGroup,
+                this,
+                this.materials[3]
+            )
+            this.buttons["connect2"] = connectButton; 
+
+
+
+
 
             let kickButton = new Txclickable_box(
                 "Kick",
@@ -397,6 +429,28 @@ export class Mahjong extends Entity implements ISystem {
             )
             this.buttons["kick"] = kickButton; 
             this.buttons["kick"].hide();
+
+
+
+            let leaveButton = new Txclickable_box(
+                "Leave Room",
+                "leave",
+                new Transform({
+                    position: new Vector3( 0, 1.65, 0),
+                    scale: new Vector3(1,1,1)
+                }),
+                buttonGroup,
+                this,
+                this.materials[3]
+            )
+            this.buttons["leave"] = leaveButton; 
+            this.buttons["leave"].hide();
+            
+
+
+            this.buttons["deal"].hide();
+
+
 
         }
 
@@ -678,9 +732,9 @@ export class Mahjong extends Entity implements ISystem {
 		ui_network_msg.positionY = -310;
 		
         if ( this.game_mode == 0 ) {
-            ui_network_msg.value = "Player vs A.I Mode.";
+            ui_network_msg.value = "Mahjong: Player vs A.I Mode.";
         } else {
-            ui_network_msg.value = "Player v Player Mode. Table: " + (this.table_index + 1);
+            ui_network_msg.value = "Mahjong: Player v Player Mode. Table: " + (this.table_index + 1);
         }
 
 		ui_network_msg.fontSize = 15;
@@ -1227,6 +1281,7 @@ export class Mahjong extends Entity implements ISystem {
         
         this.stage.on_score_updated( this.final_scores , this.game_mode , this.round , "mahjong");
         this.buttons["deal"].show();
+        this.buttons["leave"].show();
     
     }
 
@@ -2630,14 +2685,40 @@ export class Mahjong extends Entity implements ISystem {
         }
     }
 
+
+
+
+
     //---------
-    async init_colyseus() {
+    init_colyseus_withPassword() {
+        let prompt = new ui.FillInPrompt(
+            'Private Room Password',
+            (e) => {
+                this.init_colyseus( e );
+            },
+            'Enter',
+            ''
+          )	
+    }
+
+    
+    //-------
+    leave_colyseus() {
+        if ( this.colyseus_room != null ) {
+            this.colyseus_room.leave();
+        }
+    }
+
+
+    //---------
+    async init_colyseus( room_pass ) {
 
         let protocol    = "wss";
         let host        = "tensaistudio.xyz:444";
 
-        //let protocol    = "ws";
-        //let host        = "localhost:2567";
+        // Debug
+        protocol    = "ws";
+        host        = "localhost:2567";
 
         var client = new Client( protocol + "://" + host );
         var room ;
@@ -2647,8 +2728,22 @@ export class Mahjong extends Entity implements ISystem {
             await this.setUserData()
         }	
 
-        client.joinOrCreate("mahjongtable_" + this.table_index , 
-            { username : this.userData.displayName , final_score: this.final_scores[this.my_seat_id], user_addr: this.userData.userId } ).then(room_instance => {
+        let room_name = "mahjongtable_" + this.table_index ;
+        if ( room_pass != null ) {
+            room_name = "mahjongtable_private_" + this.table_index ;
+        }
+        log( "Joining ", room_name );
+
+
+        client.joinOrCreate( room_name , 
+            { 
+                username :      this.userData.displayName , 
+                final_score:    this.final_scores[this.my_seat_id], 
+                user_addr:      this.userData.userId ,
+                password:       room_pass
+            } 
+        
+        ).then(room_instance => {
                 
             room = room_instance
             
@@ -2661,7 +2756,7 @@ export class Mahjong extends Entity implements ISystem {
                   // the client has initiated the disconnection
                   log("room.onLeave", "Normal closation")
                 }
-                _this.colyseus_transaction.push( ["server_shutdown" ]);
+                _this.colyseus_transaction.push( ["server_shutdown" , code ]);
 
             });
 
@@ -2720,6 +2815,8 @@ export class Mahjong extends Entity implements ISystem {
                         _this.players_deck[ h ].push( starting_deck[h][i] );
                     }
                 }
+                
+
                 _this.clear_buttons();
                 _this.sounds["shuffle"].playOnce();
                 _this.anim_dealing = 1;
@@ -2839,9 +2936,17 @@ export class Mahjong extends Entity implements ISystem {
                 _this.resync_deck_to_ent();
                                 
             });
+
+
+            if ( this.tiles_entity_created == 0 ) {
+                this.createMahjongPieces();
+                this.tiles_entity_created = 1;
+            }
+            
             this.colyseus_room = room;
             this.clear_buttons();
             this.buttons["deal"].show();
+            this.buttons["leave"].show();
                 
         }).catch(e => {
 
@@ -3049,13 +3154,17 @@ export class Mahjong extends Entity implements ISystem {
             scale: new Vector3(0.08 , 0.08, 0.08 )
         }))
 
+        
 
         this.createMaterials();
         this.createButtons();
         this.createUI();
         this.createSeatWinds();
        
-        
+        if ( this.tiles_entity_created == 0 && this.game_mode == 0) {
+            this.createMahjongPieces();
+            this.tiles_entity_created = 1;
+        }
     }
 
     //-----
@@ -3081,6 +3190,8 @@ export class Mahjong extends Entity implements ISystem {
     //------
     return_ents_to_walls() {
         
+        
+
         // Return all piece entities to wall
         for ( let h = 0 ; h < 4 ; h++) {
             for ( let i = this.players_discarded_ent[h].length - 1 ; i >= 0 ; i-- ) {
@@ -3601,6 +3712,7 @@ export class Mahjong extends Entity implements ISystem {
         this.gameover = 1;
         ui.displayAnnouncement("Game ends in a draw.", 10, Color4.Yellow(), 20, false);
         this.buttons["deal"].show();
+        this.buttons["leave"].show();
     }
 
 
@@ -3915,10 +4027,21 @@ export class Mahjong extends Entity implements ISystem {
 
         } else if ( colyseus_transaction[0] == "server_shutdown" ) {
             
-            ui.displayAnnouncement("Server has been shutdown/rebooted. Please reconnect. Sorry for interrupting your game.",5, Color4.Yellow(), 14,false);
+            let code = colyseus_transaction[1];
+            if ( code > 1000 ) {
+                ui.displayAnnouncement("Server has been shutdown/rebooted. Please reconnect. Sorry for interrupting your game.",5, Color4.Yellow(), 14,false);
+            } else {
+                ui.displayAnnouncement("You have been disconnected." , 5, Color4.Yellow(), 14,false);
+            }
             this.gameover = 1;
-            this.clear_deck();
+
+            if ( this.tiles_entity_created == 1 ) {
+                this.clear_deck();
+            }
+
+            this.clear_buttons();
             this.buttons["connect"].show();
+            this.buttons["connect2"].show();
 
         } 
     }
@@ -4527,10 +4650,23 @@ export class Mahjong extends Entity implements ISystem {
             this.new_round();
         
         } else if ( id == "connect") {
-            this.init_colyseus();
+            this.init_colyseus(null);
+
+
+        } else if ( id == "connect2") {
+            this.init_colyseus_withPassword();
+        
+        } else if ( id == "leave") {
+
+            this.leave_colyseus();
+
+
 
         } else if ( id == "kick") {
             this.colyseus_room.send("kick");
+        
+        } else if ( id == "help") {
+            openExternalURL("https://playmahjong.io/how-to-play-mahjong");
         }
     }
     

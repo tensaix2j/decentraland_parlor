@@ -18,7 +18,8 @@ class Stage extends Entity {
     public final_scores = [0,0,0,0];
     public round   = 1;
     public sounds = {};
-
+    public bgm ;
+    
 
     constructor() {
         
@@ -36,7 +37,7 @@ class Stage extends Entity {
             scale: new Vector3( 1, 1,  0.98 )
         }))
         building.addComponent( new GLTFShape("models/building_4x2.glb"));
-        
+        building.getComponent( GLTFShape ).isPointerBlocker = false;
         
         
         let common_plane_shape = new PlaneShape();
@@ -75,6 +76,26 @@ class Stage extends Entity {
                 distance:20
             }
         ))
+
+
+        buyable_poap = new Entity();
+        buyable_poap.setParent( this );
+        buyable_poap.addComponent( new Transform({
+            position: new Vector3( 0.3, 4 , 8.72),
+            scale: new Vector3( 5 ,5 ,1 ),
+        }))
+        buyable_poap.addComponent( common_plane_shape );
+        buyable_poap.addComponent( this.materials[7] );
+        buyable_poap.getComponent( Transform ).rotation.eulerAngles = new Vector3(180, 90,0);
+        buyable_poap.addComponent( new OnPointerDown(
+            (e)=>{
+                this.buyable_poap_onclick("39029");
+            },{
+                hoverText:"Redeem POAP (150pts)",
+                distance:20
+            }
+        ))
+
         
 
 
@@ -204,7 +225,7 @@ class Stage extends Entity {
         this.read_userstate();
 
         this.init_bgm();
-		
+		this.init_onenter_event();
         
     }
 
@@ -357,8 +378,25 @@ class Stage extends Entity {
         const streamSource = new Entity()
 		streamSource.addComponent(bgm)
 		engine.addEntity(streamSource)
-        bgm.volume = 0.03;
+        this.bgm = bgm;
+        //this.bgm.volume = 0.1;
         
+    }
+
+    //------
+    async init_onenter_event() {
+
+        if (!this.userData) {
+            await this.setUserData()
+        }	
+
+        onEnterSceneObservable.add((player) => {
+
+            if (player.userId === this.userData.userId) {
+                log("I entered the scene!");
+                //this.bgm.volume = 0.1;
+            }
+        })
     }
 
 
@@ -408,6 +446,14 @@ class Stage extends Entity {
         poap_mat.roughness = 1;
         poap_mat.specularIntensity = 0;
         this.materials.push( poap_mat );
+
+        poap_mat = new Material();
+        poap_mat.albedoTexture = new Texture("images/poap_39029.png");
+        poap_mat.transparencyMode = 1;
+        poap_mat.roughness = 1;
+        poap_mat.specularIntensity = 0;
+        this.materials.push( poap_mat );
+
     }
 
 
