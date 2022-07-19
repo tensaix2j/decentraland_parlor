@@ -108,8 +108,7 @@ export class Mahjong extends Entity implements ISystem {
     constructor( stage, game_mode , table_index ) {
 
         super();
-        engine.addEntity(this);
-
+        this.setParent(stage);
         this.stage = stage;
         this.game_mode = game_mode;
         this.table_index = table_index;
@@ -1279,7 +1278,7 @@ export class Mahjong extends Entity implements ISystem {
         
         
         
-        this.stage.on_score_updated( this.final_scores , this.game_mode , this.round , "mahjong");
+        this.stage.on_score_updated( this.final_scores , this.game_mode , this.round , "mahjong" , this.my_seat_id );
         this.buttons["deal"].show();
         this.buttons["leave"].show();
     
@@ -2716,10 +2715,7 @@ export class Mahjong extends Entity implements ISystem {
         let protocol    = "wss";
         let host        = "tensaistudio.xyz:444";
 
-        // Debug
-        protocol    = "ws";
-        host        = "localhost:2567";
-
+        
         var client = new Client( protocol + "://" + host );
         var room ;
         var _this = this;
@@ -2942,7 +2938,7 @@ export class Mahjong extends Entity implements ISystem {
                 this.createMahjongPieces();
                 this.tiles_entity_created = 1;
             }
-            
+
             this.colyseus_room = room;
             this.clear_buttons();
             this.buttons["deal"].show();
@@ -4901,11 +4897,11 @@ export class Mahjong extends Entity implements ISystem {
             this.process_colyseus_transaction();
         }
 
-        let diff_x = Camera.instance.feetPosition.x - this.getComponent(Transform).position.x ;
-        let diff_z = Camera.instance.feetPosition.z - this.getComponent(Transform).position.z ;
+        let diff_x = Camera.instance.feetPosition.x - this.getComponent(Transform).position.x - this.getParent().getComponent(Transform).position.x ;
+        let diff_z = Camera.instance.feetPosition.z - this.getComponent(Transform).position.z - this.getParent().getComponent(Transform).position.z ;
         if ( diff_x * diff_x + diff_z * diff_z  < 20 ) {
         
-            let diff_y = Camera.instance.feetPosition.y - this.getComponent(Transform).position.y ;
+            let diff_y = Camera.instance.feetPosition.y - this.getComponent(Transform).position.y - this.getParent().getComponent(Transform).position.y;
             if ( diff_y * diff_y < 9) { 
                 this.ui_root_for_distance_toggle.visible = true;
             } else {

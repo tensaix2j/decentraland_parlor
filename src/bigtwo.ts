@@ -7,7 +7,7 @@ import * as ui from '@dcl/ui-scene-utils'
 import { Txclickable_box } from "src/txclickable_box"
 
 
-export class Doudizhu extends Entity implements ISystem {
+export class Bigtwo extends Entity implements ISystem {
 
     public stage; 
     public game_mode;
@@ -15,17 +15,17 @@ export class Doudizhu extends Entity implements ISystem {
 
     // Logical values
     public deck = [];
-    public players_deck                 = [[],[],[]];
-    public discarded_deck               = [[],[],[]];
+    public players_deck                 = [[],[],[],[]];
+    public discarded_deck               = [[],[],[],[]];
 
     // Acutal entities.
     public wall_pieces_ent              = [];
-    public players_concealed_ent        = [[],[],[]];
-    public players_discarded_ent        = [[],[],[]];
+    public players_concealed_ent        = [[],[],[],[]];
+    public players_discarded_ent        = [[],[],[],[]];
     
     // Positions for the ents
-    public players_concealed_pos        = [[],[],[]];
-    public players_discarded_pos        = [[],[],[]];
+    public players_concealed_pos        = [[],[],[],[]];
+    public players_discarded_pos        = [[],[],[],[]];
     public wall_pieces_pos              = [];
     
     public userData;
@@ -56,21 +56,19 @@ export class Doudizhu extends Entity implements ISystem {
     public whose_turn = 0;
     public my_seat_id = 0;
 
-    public curbid = 0 ;
-    public landlord = -1;
     public round_winner = -1;
-    public bomb_or_rocket = 0;
 
 
     public final_scores = [0,0,0,0];
     public last_discarded_vals = [];
     public last_discarded_side = -1;
 
-    public round_actions  = [ -1 , -1 , -1 ];
+    public round_actions  = [ -1 , -1 , -1 , -1];
 
     public sounds;
 
     public cards_entity_created = 0;
+    public new_round_diamond_3_out = 0;
 
 
 
@@ -98,17 +96,7 @@ export class Doudizhu extends Entity implements ISystem {
         engine.addSystem( this );
     }
 
-
-    //-------
-    bid_round_procedure() {
-        
-        if ( this.whose_turn == this.my_seat_id ) {
-            this.render_pre_round_bid_buttons();
-        } else { 
-            this.NPC_decide_pre_round_bid( this.whose_turn );
-        }
-    }
-
+    
 
     //----------
     check_pattern( selected_vals ) {
@@ -116,176 +104,115 @@ export class Doudizhu extends Entity implements ISystem {
         let ret = -1;
         if ( selected_vals.length == 1 ) {
             // Single
-            ret = 20;
+            ret = 11;
             log( "Pattern is: Single");
         
         } else if ( selected_vals.length == 2 ) {
 
             // Pair
-            if ( selected_vals[0] > 51 && selected_vals[1] > 51) {
-                // 2 Jokers
-                log( "Pattern is: Rocket");
-                ret = 22;
-            } else if ( selected_vals[0] % 13 == selected_vals[1] % 13 && selected_vals[0] < 52 && selected_vals[1] < 52 ) {
+            if ( this.card_val(selected_vals[0]) == this.card_val(selected_vals[1] ) ) {
                 log( "Pattern is: Pair");
-                ret = 19;
+                ret = 12;
             }
         
         } else if ( selected_vals.length == 3 ) {
             // Tripple 
-            if ( selected_vals[0] % 13 == selected_vals[1] % 13 && 
-                selected_vals[1] % 13 == selected_vals[2] % 13 ) {
+            if ( this.card_val( selected_vals[0] ) == this.card_val( selected_vals[1] ) && 
+                 this.card_val( selected_vals[1] ) == this.card_val( selected_vals[2] ) ) {
                 
                 log( "Pattern is: Tripplet");
-                ret = 18;    
+                ret = 13;    
             }
         
-        } else if ( selected_vals.length >= 4 ) {
+        } else if ( selected_vals.length == 4 ) {
+            // Four of a kind 
+            if ( this.card_val( selected_vals[0] ) == this.card_val( selected_vals[1] ) && 
+                 this.card_val( selected_vals[1] ) == this.card_val( selected_vals[2] ) && 
+                 this.card_val( selected_vals[2] ) == this.card_val( selected_vals[3] ) 
+                 ) {
+                log( "Pattern is: Four of a kind");
+                ret = 14;    
+            }
+        
+        } else if ( selected_vals.length == 5 ) {
             
             // Need the suitless statistic
-            let tmp_stat = {}
+            let tmp_stat = {};
+            let suit_stat = {};
+
             for ( let i = 0 ; i < selected_vals.length ; i++) {
-                let cardval = this.card_val( selected_vals[i] )
+
+                let cardval  = this.card_val( selected_vals[i] )
+                let cardsuit = this.card_suit( selected_vals[i] )
+
                 this.safe_incr( tmp_stat , cardval , 1 );
-            }
-            
-            // 4 cards
-            if ( selected_vals.length == 4 ) { 
-                // 4 cards
-                for ( let key in tmp_stat ) {
-                    if ( tmp_stat[key] == 3 ) {
-                        // 3 + 1
-                        log( "Pattern is: 3 + 1");
-                        ret = 17;
-                    } else if ( tmp_stat[key] == 4 ) {
-                        // 4 + 0
-                        log( "Pattern is: BOMB");
-                        ret = 21;
-                    }
-                }
+                this.safe_incr( suit_stat, cardsuit , 1 ); 
             }
 
-            // >= 5 card and above can check for single,double and tripple sequences.
-            if ( selected_vals.length >= 5 ) {
-                ret = this.is_single_sequence(  tmp_stat );
-                if ( ret != -1) {
-                    log("Pattern is: Sequence")
+            
+            ret = this.is_single_sequence(  tmp_stat );
+            if ( ret != -1) {
+                if ( Object.keys(suit_stat).length == 1 ) {
+                    log("Pattern is: Straight Flush")
+                    ret = 19;
+                } else {
+                    log("Pattern is: Straight")
                     ret = 15;
                 }
-
-                if ( ret == -1) {
-                    ret = this.is_pair_sequence(  tmp_stat );
-                    if ( ret != -1) {
-                        log("Pattern is: Sequence of Pairs")
-                        ret = 14;
-                    }
-                }
-
-
-                if ( ret == -1) {
-                    ret = this.is_triplet_sequence( tmp_stat );
-                    if ( ret != -1) {
-                        log("Pattern is: Sequence of Tripplets")
-                        ret = 13;
-                    }
-                }
-
-
-                if ( ret == -1 ) {
-                    
-                    let pair_count      = 0;
-                    let single_count    = 0;
-                    let quad_count      = 0;
-
-                    for ( let key in tmp_stat ) {
-                        if ( tmp_stat[key] == 4 ) {
-                            quad_count += 1;
-                        } else if ( tmp_stat[key] == 2 ) {
-                            pair_count += 1;
-                        } else if ( tmp_stat[key] == 1) {
-                            single_count += 1;
-                        }
-                    }
-                    if ( quad_count == 1 && single_count == 2 && pair_count == 0) {
-                        ret = 11;
-                        log("Pattern is: 4 + 2")
-                    } else if ( quad_count == 1 && pair_count == 2 && single_count == 0) {
-                        ret = 10;
-                        log("Pattern is: 4 + 2 pairs")
-                    }
-                }
-                
-                if ( ret == -1 ) {
-                    // see how many tripplets can be removed .
-                    let tmp_stat2 = this.copyObject( tmp_stat );
-                    let tmp_stat3 = {};
-
-                    let pair_count = 0;
-                    let single_count = 0;
-                    let tripplet_count = 0;
-                    
-                    for ( let key in tmp_stat2 ) {
-                        if ( tmp_stat2[key] == 3 ) {
-                            tmp_stat2[key] = 0;
-                            this.safe_incr( tmp_stat3 , key, 3 );
-                            tripplet_count += 1;
-
-                        } else if ( tmp_stat2[key] == 2 ) {
-                            pair_count += 1;
-                        } else if ( tmp_stat2[key] == 1) {
-                            single_count += 1;
-
-                        }
-                    }
-                    this.clear_empty_key( tmp_stat2 );
-
-                   
-                    let has_sequence_of_tripplet = this.is_triplet_sequence( tmp_stat3 );
-                    if ( has_sequence_of_tripplet > -1  || tripplet_count == 1) {
-                        
-                        // Number of tripplet dictates how many pairs can be attached.
-                        tripplet_count = Object.keys( tmp_stat3 ).length;
-                        
-                        log( "pair count", pair_count );
-                        log( "single count", single_count );
-
-                        if ( pair_count == tripplet_count ) {
-                            
-                            if ( pair_count == 1) {
-                                log( "check_pattern","Pattern is: 3 + 2");
-                                ret = 12;
-                            } else {
-                                log( "check_pattern","Pattern is: Sequence of triplets with attached pairs");
-                                ret = 9;
-                            }
-
-                        } else if ( single_count == tripplet_count ) {
-                            log( "Pattern is: Sequence of triplets with attached cards");
-                            ret = 16;
-                        }
-                    }
-                    
-                    
-                }
-
             }
+            if ( ret == -1) {
+                if ( Object.keys(suit_stat).length == 1 ) {
+                    log("Pattern is: Flush")
+                    ret = 16;
+                }
+            }
+            if ( ret == -1) {
+                if ( Object.keys(tmp_stat).length == 2 ) {
+                    for ( let key in tmp_stat ) {
+                        if ( tmp_stat[key] == 2  || tmp_stat[key] == 3 ) {
+                            log("Pattern is Full House");
+                            ret = 17;
+                            break;
+
+                        } else if ( tmp_stat[key] == 4 || tmp_stat[key] == 1 ) {
+                            log("Pattern is 4 + 1");
+                            ret = 18;
+                            break;
+                        }
+                    }
+                }
+            }            
         }
         return ret;
     }
+
 
     //------------
     // 3,4,5,6,7,8,9,10,J, Q, K, A,   2, JB, JR
     // 1 2 3 4 5 6 7  8 9 10 11 12    13  14  15
     card_val( val ) {
-        if (val >= 52 ) {
-            return val - 52 + 14;
+        if ( val % 13 == 0 ) {
+            return 13;
         } else {
-            if ( val % 13 == 0 ) {
-                return 13;
-            } else {
-                return val % 13
-            }
-        } 
+            return val % 13
+        }
+    }
+
+    //-------------
+    card_suit( val ) {
+        return (val / 13 ) >> 0;
+    }
+
+    card_suit_val( val ) {
+
+        let cv = this.card_val(val);
+        if ( cv == 0 ) {
+            cv = 13;
+        }
+        let cs = this.card_suit(val);
+        
+        return  cv * 4 + cs;
+
     }
 
     //---------
@@ -299,33 +226,82 @@ export class Doudizhu extends Entity implements ISystem {
         log("Your Pattern type", your_pattern);
         log("Table Pattern type", table_pattern);
         
-        if ( table_vals.length == 0 ) {
+        if ( table_pattern == -1 ) {
             return 1;
         }
-
         if ( your_pattern < table_pattern ) {
             return -1;
         }
-        if ( your_pattern != table_pattern && your_pattern < 21 ) {
+        if ( your_pattern != table_pattern && table_pattern < 15 ) {
             return -1;
-        }
-        if ( your_vals.length != table_vals.length && your_pattern < 21 ) {
-            return -1;
-        }
-        if ( your_pattern >= 21 && your_pattern > table_pattern ) {
-            return 1;
         }
         
+        if ( table_pattern >= 15 ) {
+            if ( your_pattern > table_pattern ) {
+                return 1;
+            } else if ( your_pattern < table_pattern ) {
+                return -1;
+            }
+        }
+
         if ( your_pattern == table_pattern ) {
 
-            // BOMB
-            if ( your_pattern == 21 || your_pattern == 20  || your_pattern == 19 || your_pattern == 18 ) {
+            if ( your_pattern == 11 ) {
                 
-                if ( this.card_val( your_vals[0] )  > this.card_val( table_vals[0] ) ) {
+                // Single
+                if ( this.card_suit_val( your_vals[0] )  > this.card_suit_val( table_vals[0] ) ) {
                     return 1;
                 }
-            } else if ( your_pattern <= 17 ) {
+
+            } else if ( your_pattern == 12 ) { 
+
+                let your_vals_sorted = this.copyArray( your_vals );
+                this.sort_suitless( your_vals_sorted );
+
+                let table_vals_sorted = this.copyArray( table_vals );
+                this.sort_suitless( table_vals );
+
+                let your_largest =  this.card_suit_val( your_vals_sorted[1] ); 
+                let table_largest = this.card_suit_val( table_vals_sorted[1] );
+
+                // Pair
+                if (  your_largest  > table_largest  ) {
+                    return 1;
+                }
+
+            } else if ( your_pattern == 13 ) {
+                // Tripplet 
+                if ( this.card_suit_val( your_vals[0] )  > this.card_suit_val( table_vals[0] ) ) {
+                    return 1;
+                }
+            
+            } else if ( your_pattern == 14 ) {
+                // four of a kind
+                if ( this.card_suit_val( your_vals[0] )  > this.card_suit_val( table_vals[0] ) ) {
+                    return 1;
+                }
                 
+            } else if ( your_pattern == 15 || your_pattern == 16 || your_pattern == 19 ) {
+                // Straight v straight    
+                let your_largest = this.card_suit_val( your_vals[0] );
+                for ( let i = 1 ; i < your_vals.length ; i++ ) {
+                    let cur_card_suit_val = this.card_suit_val( your_vals[i] );
+                    if ( cur_card_suit_val > your_largest ) {
+                        your_largest = cur_card_suit_val;
+                    }
+                }
+                let table_largest = this.card_suit_val( table_vals[0] );
+                for ( let i = 1 ; i < table_vals.length ; i++ ) {
+                    let cur_card_suit_val = this.card_suit_val( table_vals[i] );
+                    if ( cur_card_suit_val > table_largest ) {
+                        table_largest = cur_card_suit_val;
+                    }
+                }
+                if ( your_largest > table_largest ) {
+                    return 1;
+                }
+
+            } else if ( your_pattern == 17 || your_pattern == 18 ) {    
                 let your_stat = {}
                 for ( let i = 0 ; i < your_vals.length ; i++) {
                     let val = this.card_val( your_vals[i] );
@@ -336,80 +312,28 @@ export class Doudizhu extends Entity implements ISystem {
                     let val = this.card_val( table_vals[i] );
                     this.safe_incr( table_stat , val , 1 );
                 }
-                
-                log( your_stat );
-                log( table_stat );
 
-                if ( your_pattern == 17 || your_pattern == 12 || your_pattern == 16 || your_pattern == 13) {
-                    let your_use_key = 0;
-                    let table_use_key = 0;
-                    // 3 + 1. compare the tripplet.
-                    for ( let key in your_stat ) {
-                        let int_key = parseInt(key);
-                        if ( your_stat[key] == 3 && int_key > your_use_key) {
-                            your_use_key = int_key;
-                        }
-                    }
-                    for ( let key in table_stat ) {
-                        let int_key = parseInt(key);
-                        if ( table_stat[key] == 3 && int_key > table_use_key) {
-                            table_use_key = int_key;
-                        }
-                    }
-
-                    log("Your key", your_use_key , "vs", "table_use_key", table_use_key)
-                    if ( your_use_key > table_use_key ) {
-                        return 1;
-                    }
-
-                } else if ( your_pattern == 15 || your_pattern == 14 ) {
-
-                    // Sequence, Seq of pair
-                    let your_use_key = 0;
-                    let table_use_key = 0;
-                    // 3 + 1. compare the tripplet.
-                    for ( let key in your_stat ) {
-                        let int_key = parseInt(key);
-                        if ( int_key > your_use_key) {
-                            your_use_key = int_key;
-                        }
-                    }
-                    for ( let key in table_stat ) {
-                        let int_key = parseInt(key);
-                        if ( int_key > table_use_key) {
-                            table_use_key = int_key;
-                        }
-                    }
-                    log("Your key", your_use_key , "vs", "table_use_key", table_use_key)
-                    if ( your_use_key > table_use_key ) {
-                        return 1;
-                    }
-
-                } if ( your_pattern == 11 || your_pattern == 10 ) {
-                    
-                    let your_use_key = 0;
-                    let table_use_key = 0;
-                    // 4 + 2. compare the quad.
-                    for ( let key in your_stat ) {
-                        let int_key = parseInt(key);
-                        if ( your_stat[key] == 4 && int_key > your_use_key) {
-                            your_use_key = int_key;
-                        }
-                    }
-                    for ( let key in table_stat ) {
-                        let int_key = parseInt(key);
-                        if ( table_stat[key] == 4 && int_key > table_use_key) {
-                            table_use_key = int_key;
-                        }
-                    }
-
-                    log("Your key", your_use_key , "vs", "table_use_key", table_use_key)
-                    if ( your_use_key > table_use_key ) {
-                        return 1;
+                let your_largest = -1;
+                for ( let key in your_stat ) {
+                    let int_key = parseInt( key );
+                    if ( your_stat[key] >= 3 ) {
+                        your_largest = int_key;
+                        break;
                     }
                 }
+                let table_largest = -1;
+                for ( let key in table_stat ) {
+                    let int_key = parseInt( key );
+                    if ( table_stat[key] >= 3 ) {
+                        table_largest = int_key;
+                        break;
+                    }
+                }
+                if ( your_largest > table_largest ) {
+                    return 1;
+                }
             }
-
+            
         }
         
         return ret;        
@@ -449,6 +373,8 @@ export class Doudizhu extends Entity implements ISystem {
         });
     }
 
+    
+
     //------------
     is_single_sequence( tmp_stat ) {
         
@@ -460,23 +386,21 @@ export class Doudizhu extends Entity implements ISystem {
         }
         
         if ( impossible == 0 ) {
-            // No 2s and Jokers.
-            for ( let key in tmp_stat ) {
-                let int_key = parseInt(key);
-                if ( int_key == 13 || int_key == 14 || int_key == 15 ) {
-                    impossible = 1;
-                    ret = -1;
-                    break;
-                }
-            }
-        }
-
-        if ( impossible == 0 ) {
             let keys = Object.keys( tmp_stat )
             this.sort_suitless( keys );
+
+            
             for ( let j = 0 ; j < keys.length - 1 ; j++) {
                 if ( parseInt(keys[j + 1 ]) - parseInt(keys[j]) == 1  && tmp_stat[ keys[j] ] == 1  && tmp_stat[ keys[j + 1] ] == 1 ) {
                     // ok
+
+                } else if ( j == 3 && parseInt(keys[j]) == 4 && parseInt(keys[j+1]) == 13 && tmp_stat[ keys[j] ] == 1  && tmp_stat[ keys[j + 1] ] == 1 ) {
+                    // 3,4,5,6,  2 still ok
+                
+                } else if ( j == 2 && parseInt(keys[j]) == 3 && parseInt(keys[j+1]) == 12 && tmp_stat[ keys[j] ] == 1  && tmp_stat[ keys[j + 1] ] == 1 ) {
+                    // 3,4,5,   A,2  still ok
+                
+
                 } else {
                     impossible = 1;
                     break;
@@ -492,90 +416,7 @@ export class Doudizhu extends Entity implements ISystem {
         return ret;
     }
 
-     //------------
-     is_pair_sequence(  tmp_stat ) {
-        
-        let ret = -1;
-        let impossible = 0;
-        
-        if ( Object.keys(tmp_stat).length < 3 ) {
-            impossible = 1;
-        }
-
-        if ( impossible == 0 ) {
-            // No 2s and Jokers pls
-            for ( let key in tmp_stat ) {
-                let int_key = parseInt(key);
-                if ( int_key == 13 || int_key == 14 || int_key == 15 ) {
-                    impossible = 1;
-                    ret = -1;
-                    break;
-                }
-            }
-        }
-        
-        if ( impossible == 0 ) {
-            let keys = Object.keys( tmp_stat )
-            this.sort_suitless( keys );
-            for ( let j = 0 ; j < keys.length - 1 ; j++) {
-                if ( parseInt(keys[j + 1 ]) - parseInt(keys[j]) == 1  && tmp_stat[ keys[j] ] == 2 && tmp_stat[ keys[j + 1] ] == 2 ) {
-                    // ok
-                } else {
-                    impossible = 1;
-                    break;
-                }
-            }
-        }   
-
-        if ( impossible == 0 ) {
-            ret = 1;
-        }
-        
-        return ret;
-    }
-
-    //-----
-    is_triplet_sequence(  tmp_stat ) {
-        
-        let ret = -1;
-        let impossible = 0;
-        
-        if ( Object.keys(tmp_stat).length < 2 ) {
-            impossible = 1;
-        }
-
-        // No 2s and Jokers pls
-        if ( impossible == 0 ) {
-            for ( let key in tmp_stat ) {
-                let int_key = parseInt(key);
-                if ( int_key == 13 || int_key == 14 || int_key == 15 ) {
-                    impossible = 1;
-                    ret = -1;
-                    break;
-                }
-            }
-        }
-        if ( impossible == 0 ) {
-            let keys = Object.keys( tmp_stat )
-            this.sort_suitless( keys );
-            for ( let j = 0 ; j < keys.length - 1 ; j++) {
-                if ( parseInt(keys[j + 1 ]) - parseInt(keys[j]) == 1  && tmp_stat[ keys[j] ] == 3 && tmp_stat[ keys[j + 1] ] == 3 ) {
-                    // ok
-                } else {
-                    impossible = 1;
-                    break;
-                }
-            }
-        }   
-
-        if ( impossible == 0 ) {
-            
-            ret = 1;
-        }
-        
-        return ret;
-    }
-
+    
 
     
 
@@ -591,7 +432,7 @@ export class Doudizhu extends Entity implements ISystem {
      //----------
      clear_deck() {
 
-        for ( let h = 0 ; h < 3 ; h++) {
+        for ( let h = 0 ; h < 4 ; h++) {
             
             // Reset all hand cardvals
             this.players_deck[h].length = 0;
@@ -605,7 +446,7 @@ export class Doudizhu extends Entity implements ISystem {
 
     //-------
     clear_round_actions() {
-        for ( let i = 0 ; i < 3 ; i++ ) {
+        for ( let i = 0 ; i < 4 ; i++ ) {
             this.round_actions[i] = -1;
         }
     }
@@ -649,8 +490,8 @@ export class Doudizhu extends Entity implements ISystem {
         )
         this.buttons["deal"] = dealButton;
         
-        let butlabels = [ "No Bid", "Bid 1", "Bid 2", "Bid 3" , "Pass", "Hint", "Submit"];
-        let butids    = [ "bid_0" , "bid_1", "bid_2", "bid_3" , "pass" , "hint", "submit" ];
+        let butlabels = [ "Pass", "Hint", "Submit"];
+        let butids    = [ "pass" , "hint", "submit" ];
 
         for ( let i = 0 ; i < butids.length ; i++  ) {
             let but = new Txclickable_box(
@@ -674,7 +515,7 @@ export class Doudizhu extends Entity implements ISystem {
     createCardPieces() {
 
         // The Wall
-        for ( let i = 0 ; i < 54 ; i++ ) {
+        for ( let i = 0 ; i < 52 ; i++ ) {
                 
             let x =  0; 
             let y =  i * 0.01 - 0.5;
@@ -738,9 +579,9 @@ export class Doudizhu extends Entity implements ISystem {
 		ui_network_msg.positionY = -310;
 		
         if ( this.game_mode == 0 ) {
-            ui_network_msg.value = "Card Game: Landlord vs Farmers: Player vs A.I Mode.";
+            ui_network_msg.value = "Card Game: The BigTwo: Player vs A.I Mode.";
         } else {
-            ui_network_msg.value = "Card Game: Landlord vs Farmers: Player v Player Mode. Table: " + (this.table_index + 1);
+            ui_network_msg.value = "Card Game: The BigTwo: Player v Player Mode. Table: " + (this.table_index + 1);
         }
 
 		ui_network_msg.fontSize = 15;
@@ -797,34 +638,10 @@ export class Doudizhu extends Entity implements ISystem {
         this.ui_announcement_tick = duration * 30;
     }
 
-
-
-
-    //---------
-    do_bid( h , bidval ) {
-
-
-        //log( "do_bid",bidval, "Player", h , this.players_deck[h]);
-        if ( bidval > this.curbid ) {
-            this.curbid = bidval ;
-        }
-
-        this.whose_turn = ( this.whose_turn + 1 ) % 3;
-        this.clear_buttons();
-
-        this.round_actions[h] = bidval;
-        this.displayAnnouncement( this.display_names[h] + " bidded " + bidval , 3, Color4.Yellow(), 14, false );
-        
-        this.sounds["bid_" + bidval ].playOnce();
-
-        
-        // Bidding round continues
-        this.anim_dealing = 3;
-        
-    }
-
+    
 
     
+
     //---------
     dumb_AI_for_do_hint( h ) {
 
@@ -845,33 +662,61 @@ export class Doudizhu extends Entity implements ISystem {
             this.safe_incr( table_stat , cardval , 1 );
         }
 
+        let table_largest_suitval = this.card_suit_val( this.last_discarded_vals[0] );
+        for ( let i = 1 ; i < this.last_discarded_vals.length ; i++ ) {
+            let cur = this.card_suit_val( this.last_discarded_vals[i] )
+            if ( cur > table_largest_suitval ) {
+                table_largest_suitval = cur;
+            }
+        }
+
         log( "AI_decide_cards_to_discard","table_pattern", table_pattern );
 
         // Single, Pair, Tripple, Quad
-        //  21: Quad
-        //  20: Single
-        //  19: Pair
-        //  18: Tripplet
-        if ( table_pattern == 21  || table_pattern == 20 || table_pattern == 19 || table_pattern == 18) {
+        //  11: Single
+        //  12: Pair
+        //  13: Tripplet
+        //  14: Quad 
+
+        if ( table_pattern == 11  || table_pattern == 12 || table_pattern == 13 || table_pattern == 14 ) {
+            
+           
+
             
             let table_main_key = this.card_val( this.last_discarded_vals[0] );
             let your_main_key = -1;
 
             let card_count = 4;
-            if ( table_pattern == 18 ) {
+            if ( table_pattern == 13 ) {
                 card_count = 3;
-            } else if ( table_pattern == 19 ) {
+            } else if ( table_pattern == 12 ) {
                 card_count = 2;
-            } else if ( table_pattern == 20 ) {
+            } else if ( table_pattern == 11) {
                 card_count = 1;
             }
-            
+                
             for ( let i = 0 ; i < 4 ; i++) {
                 for ( let key in your_stat ) {
+                    let int_key = parseInt(key);
                     // i == 0 means in the first round we match exactly card count, in the next round only we dismantle 
-                    if ( ( i == 0 && your_stat[key] == card_count || i > 0 && your_stat[key] == (card_count + i) ) && parseInt(key) > table_main_key ) {
-                        your_main_key = parseInt(key);
+                    if ( ( i == 0 && your_stat[key] == card_count || i > 0 && your_stat[key] == (card_count + i) ) && parseInt(key) >= table_main_key ) {
+
+                        let your_largest_suitval = -1;
+                        for ( let i = 0 ; i < this.players_deck[h].length ; i++) {
+                            let cardval = this.card_val( this.players_deck[h][i] );
+                            if ( cardval == int_key ) {
+                                let cur = this.card_suit_val( this.players_deck[h][i] )
+                                if ( cur > your_largest_suitval ) {
+                                    your_largest_suitval = cur;
+                                }
+                            }
+                        }
+                        if ( your_largest_suitval > table_largest_suitval ) {
+                            your_main_key = parseInt(key);
+                            break;
+                        }
                         break;
+                        
                     }
                 }
                 if ( your_main_key > -1) {
@@ -880,10 +725,26 @@ export class Doudizhu extends Entity implements ISystem {
             }
 
             if ( your_main_key > -1 ) {
+
+                let lead_card_cleared = 0;
                 for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+
                     if ( this.card_val( this.players_deck[h][i] ) == your_main_key ) {
-                        ret_vals.push( this.players_deck[h][i] );
+                        
+                        if ( your_main_key > table_main_key ) {
+                            ret_vals.push( this.players_deck[h][i] );
+
+                        } else if ( table_main_key == your_main_key ) {
+                            
+                            if ( this.card_suit_val(this.players_deck[h][i]) >  table_largest_suitval || ret_vals.length + 1 < this.last_discarded_vals.length || lead_card_cleared == 1 ) {
+                                lead_card_cleared = 1;
+                                ret_vals.push( this.players_deck[h][i] );
+
+                            }
+                        }                        
                     }
+
+
                     if ( ret_vals.length == this.last_discarded_vals.length ) {
                         break;
                     }
@@ -891,281 +752,238 @@ export class Doudizhu extends Entity implements ISystem {
             } 
         
 
-        // Sequence of 1, pair and tripplet.
-        //  15: Seq of 1s
-        //  14: Seq of 2s
-        //  13: Seq of 3s
-        //  
-        } else if ( table_pattern == 15 || table_pattern == 14 || table_pattern == 13 ) {
-            
-            let table_keys = Object.keys( table_stat );
-            this.sort_suitless( table_keys );
-            let table_main_key = table_keys[ table_keys.length - 1];
-            let seq_length = Object.keys( table_stat ).length;
-            
-            let card_count = 1;
-            if ( table_pattern == 14 ) {
-                card_count = 2;
-            } else if ( table_pattern == 13 ) {
-                card_count = 3;
-            } 
+            //  15: Straight
+            //  16: Flush
+            //  17: Full House
+            //  18: 4 + 1
+            //  19: Straight Flush
 
+        } else if ( table_pattern >= 15  ) {
             
-            let your_main_key = -1;
+            if ( table_pattern == 15 || table_pattern == 19 ) {
 
-            for ( let key in your_stat ) {
-                let int_key = parseInt(key);
-                let impossible = 0;
-                if ( int_key > parseInt(table_main_key) ) {
-                    
-                    for ( let i = int_key ; i > int_key - seq_length ; i-- ) {
-                        if ( your_stat[i] >= card_count  && i < 13) {
-                        } else {
-                            impossible = 1;
-                            break;
+                // Check straight 
+                if ( ret_vals.length == 0 ) {
+
+                    let valid_cardvals = [];
+        
+                    for ( let key in your_stat ) {
+                        
+                        let int_key = parseInt(key)
+        
+                        if ( your_stat[key] >= 1 && 
+                             your_stat[int_key+1] >= 1 && 
+                             your_stat[int_key+2] >= 1 && 
+                             your_stat[int_key+3] >= 1 && 
+                             your_stat[int_key+4] >= 1  ) {
+                           
+                            valid_cardvals = [ int_key , int_key+1, int_key+2, int_key+3, int_key+4 ]
+                                
+                        } else if ( 
+                            your_stat[1] >= 1 &&
+                            your_stat[2] >= 1 && 
+                            your_stat[3] >= 1 && 
+                            your_stat[4] >= 1 && 
+                            your_stat[13] >= 1  ) {
+        
+                            valid_cardvals = [ 1,2,3,4, 13 ]
+                        
+                        } else if ( 
+                            your_stat[1] >= 1 &&
+                            your_stat[2] >= 1 && 
+                            your_stat[3] >= 1 && 
+                            your_stat[12] >= 1 && 
+                            your_stat[13] >= 1  ) {
+        
+                            valid_cardvals = [ 1,2,3, 12, 13 ]
+                        }
+                        
+                    }
+
+                    // Check > table_largest_suitval
+                    let has_larger_csv = 0; 
+                    if ( valid_cardvals.length > 0 ) {
+                        for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                            let cv = this.card_val(this.players_deck[h][i]);
+                            let csv = this.card_suit_val( this.players_deck[h][i] );
+                            if ( cv == valid_cardvals[4] && csv > table_largest_suitval ) {
+                                has_larger_csv = 1;
+                                break;
+                            }
                         }
                     }
-                    if ( impossible == 0) {
-                        your_main_key = int_key;
+        
+                    if ( valid_cardvals.length > 0 && has_larger_csv == 1 ) {
+                        let used = {};
+                        for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                            let cv = this.card_val( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 0 );
+                            if ( valid_cardvals.indexOf(cv) > -1 && used[cv] < 1 ) {
+                                ret_vals.push( this.players_deck[h][i] );
+                                this.safe_incr( used, cv , 1 );
+                            }
+                        }
+                    } 
+                }
+                
+
+            }
+
+
+            // Check flush in my own hand
+            if ( ret_vals.length == 0 && table_pattern <= 16 ) {
+
+                
+                let your_suit_stat = {}
+                let suit_highest_val = {}
+
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++) {
+                    let cardsuit = this.card_suit( this.players_deck[h][i] );
+                    let csv = this.card_suit_val( this.players_deck[h][i] ) ;
+                    if ( suit_highest_val[cardsuit] == null || csv > suit_highest_val[cardsuit] ) {
+                        suit_highest_val[ cardsuit ] = csv;
+                    }
+                    this.safe_incr( your_suit_stat , cardsuit , 1 );
+                }
+                
+                let your_main_suit = -1;
+                for ( let suit in your_suit_stat ) {
+                    let int_suit = parseInt( suit )
+                    if ( your_suit_stat[suit] >= 5 && suit_highest_val[ suit ] > table_largest_suitval ) {
+                        // has flush 
+                        your_main_suit = int_suit;
                         break;
                     }
                 }
-            }
-
-            if ( your_main_key > -1 ) {
-                let used = {};
-                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                    let cv = this.card_val( this.players_deck[h][i] );
-                    this.safe_incr( used, cv , 0 );
-                    if ( cv > your_main_key - seq_length && cv <= your_main_key && used[cv] < card_count ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    }
-                }
-            } 
-            
-
-        // Tripplet seq + attached
-        //  17: 3 + 1
-        //  16: 3,3.. + 1,1...
-        //  12: 3 + 2 (5 cards)
-        //   9: 3,3.. + 2,2,... (>5 cards)   
-        } else if ( table_pattern == 17 || table_pattern == 16 || table_pattern == 12 || table_pattern == 9 ) {
-            
-            let table_main_key = -1;
-            let table_tripplet_count = 0;
-            let table_pair_count = 0;
-            let table_single_count = 0;
-            for ( let key in table_stat ) {
-                let int_key = parseInt( key );
-                if ( table_stat[key] == 3 ) {
-                    if ( int_key > table_main_key ) {
-                        table_main_key = int_key;
-                    }
-                    table_tripplet_count += 1;
-                } else if ( table_stat[key] == 2 ) {
-                    table_pair_count += 1;
-                } else if ( table_stat[key] == 1 ) {
-                    table_single_count += 1;
-                }
-            }
-            
-            let seq_length = table_tripplet_count;
-            let your_main_key = -1;
-            let your_secondary_keys = [];
-            let card_count = 3;
-
-            
-            for ( let key in your_stat ) {
-
-                let int_key = parseInt(key);
-                let impossible = 0;
-                if ( int_key > table_main_key ) {
-                    
-                    for ( let i = int_key ; i > int_key - seq_length ; i-- ) {
-                        if ( your_stat[i] >= card_count  && i < 13) {
-                        } else {
-                            impossible = 1;
-                            break;
-                        }
-                    }
-                    if ( impossible == 0 && your_main_key == -1) {
-                        your_main_key = int_key;
-                    }
-                }
-
-
-                if ( your_stat[key] == 2 && table_pair_count > 0 && your_secondary_keys.length < table_pair_count ) {
-                    // Exact match first, if cannot find then next round only dismantle
-                    your_secondary_keys.push( int_key );
-
-                } else if ( your_stat[key] == 1 && table_single_count > 0  && your_secondary_keys.length < table_single_count ) {
-                    // Exact match first, if cannot find then next round only dismantle
-                    your_secondary_keys.push( int_key );                    
-                }
-            }
-
-            let your_secondary_keys_len_required = table_single_count || table_pair_count;
-            
-            // Exact match cannot ...so any >
-            for ( let i = 0 ; i < 4 ; i++) {
-                if ( your_secondary_keys.length < your_secondary_keys_len_required ) {
-                    for ( let key in your_stat ) {
-                        let int_key = parseInt(key);
-                        if ( your_stat[key] >= 2 && your_stat[key] < 3 && table_pair_count > 0 && your_secondary_keys.length < table_pair_count && your_secondary_keys.indexOf(int_key) == -1 ) {
-                            // Exact match first, if cannot find then next round only dismantle
-                            your_secondary_keys.push( int_key );
-        
-                        } else if ( your_stat[key] >= 1 && your_stat[key] < 3 && table_single_count > 0  && your_secondary_keys.length < table_single_count && your_secondary_keys.indexOf(int_key) == -1 ) {
-                            // Exact match first, if cannot find then next round only dismantle
-                            your_secondary_keys.push( int_key );                    
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-
-            if ( your_main_key > -1  && your_secondary_keys.length >= your_secondary_keys_len_required ) {
-                
-                let used = {};
-                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                
-                    let cv = this.card_val( this.players_deck[h][i] );
-                    this.safe_incr( used, cv , 0 );
-                    if ( cv > your_main_key - seq_length && cv <= your_main_key && used[cv] < card_count ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    } else if ( your_secondary_keys.indexOf(cv) > -1 && table_single_count > 0 && used[cv] < 1 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    } else if ( your_secondary_keys.indexOf(cv) > -1 && table_pair_count > 0 && used[cv] < 2 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    }
-                }
-            } 
-    
-        // Quad + attached
-        //  11: 4 + 1,1
-        //  10: 4 + 2,2...
-        } else if ( table_pattern == 11 || table_pattern == 10 ) {
-
-            let table_main_key = -1;
-            let table_pair_count = 0;
-            let table_single_count = 0;
-            
-            for ( let key in table_stat ) {
-                let int_key = parseInt( key );
-                if ( table_stat[key] == 4 ) {
-                    table_main_key = int_key;
-                } else if ( table_stat[key] == 2 ) {
-                    table_pair_count += 1;
-                } else if ( table_stat[key] == 1 ) {
-                    table_single_count += 1;
-                }
-            }
-
-
-            let your_main_key = -1;
-            let your_secondary_keys = [];
-
-
-            for ( let key in your_stat ) {
-                let int_key = parseInt(key);
-                if ( int_key > table_main_key && your_stat[key] == 4 ) {
-                    your_main_key = int_key;
-                    break;
-                }
-                if ( your_stat[key] == 2 && table_pair_count > 0 && your_secondary_keys.length < table_pair_count ) {
-                    // Exact match first, if cannot find then next round only dismantle
-                    your_secondary_keys.push( int_key );
-
-                } else if ( your_stat[key] == 1 && table_single_count > 0  && your_secondary_keys.length < table_single_count ) {
-                    // Exact match first, if cannot find then next round only dismantle
-                    your_secondary_keys.push( int_key );                    
-                }
-            }
-
-            // Exact match cannot ...so any >
-            for ( let i = 0 ; i < 4 ; i++) {
-                if ( your_secondary_keys.length < 2 ) {
-                    for ( let key in your_stat ) {
-                        let int_key = parseInt(key);
-                        if ( your_stat[key] >= 2 && your_stat[key] < 4 && table_pair_count > 0 && your_secondary_keys.length < table_pair_count && your_secondary_keys.indexOf(int_key) == -1 ) {
-                            // Exact match first, if cannot find then next round only dismantle
-                            your_secondary_keys.push( int_key );
-        
-                        } else if ( your_stat[key] >= 1 && your_stat[key] < 4 && table_single_count > 0  && your_secondary_keys.length < table_single_count && your_secondary_keys.indexOf(int_key) == -1 ) {
-                            // Exact match first, if cannot find then next round only dismantle
-                            your_secondary_keys.push( int_key );                    
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-
-            if ( your_main_key > -1  && your_secondary_keys.length >= 2 ) {
-                
-                let used = {};
-                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                
-                    let cv = this.card_val( this.players_deck[h][i] );
-                    this.safe_incr( used, cv , 0 );
-                    if ( cv == your_main_key && used[cv] < 4 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    } else if ( your_secondary_keys.indexOf(cv) > -1 && table_single_count > 0 && used[cv] < 1 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    } else if ( your_secondary_keys.indexOf(cv) > -1 && table_pair_count > 0 && used[cv] < 2 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    }
-                }
-            } 
-        }
-
-        // Check Pattern regardless combo .i.e Rocket and Bombs
-        if ( ret_vals.length == 0 ) {
-
-            if ( table_pattern < 21 ) {
-
-                let your_main_key = -1;
-                for ( let key in your_stat ) {
-                    let int_key = parseInt(key);
-                    if ( your_stat[key] == 4 ) {
-                        your_main_key = int_key;
-                        break;
-                    }
-                }
-                if ( your_main_key > -1) {
+                if ( your_main_suit > -1) {
+                    let used = {};
                     for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                        if ( this.card_val( this.players_deck[h][i] ) == your_main_key ) {
+                        let cs = this.card_suit( this.players_deck[h][i] );
+                        this.safe_incr( used, cs , 0 );
+                        if ( cs == your_main_suit && used[cs] < 5 ) {
                             ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cs , 1 );
                         }
-                    }   
+                    }
                 }
+
             }
             
 
-            // Extreme last resort to use Rocket.
-            if ( ret_vals.length == 0 ) {
-                if ( your_stat[14] == 1 && your_stat[15] == 1 ) {
+            // Check 4 + 1
+            if ( ret_vals.length == 0 && table_pattern <= 18 ) {
+
+                let has_quad = -1;
+                let has_single = -1;
+                let table_main_key = -1;
+
+                for ( let key in table_stat ) {
+                    let int_key = parseInt(key)
+                    if ( table_stat[key] >= 4) {
+                        table_main_key = int_key;
+                        break
+                    }
+                }
+                
+                for ( let key in your_stat ) {
+
+                    let int_key = parseInt(key);
+                    if ( your_stat[key] >= 4 && int_key > table_main_key ) {
+                        has_quad = int_key
+                    } else if ( your_stat[key] == 1 ) {
+                        if ( has_single == -1) {
+                            has_single = int_key
+                        } else if ( int_key < has_single ) {
+                            has_single = int_key
+                        }
+                    }
+                }
+
+                // find a useless card for the +1..
+                if ( has_single == -1 ) {
+                    for ( let key in your_stat ) {
+                        let int_key = parseInt(key);
+                        if ( int_key != has_quad  ) {
+                            if ( has_single == -1 ) {
+                                has_single = int_key;
+                            } else if ( int_key < has_single ) {
+                                has_single = int_key;
+                            }
+                        } 
+                    }
+                }
+
+
+                if ( has_quad > -1 && has_single > -1 ) {
+                    let used = {};
                     for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
                         let cv = this.card_val( this.players_deck[h][i] );
-                        if ( cv >= 14 ) {
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == has_quad && used[cv] < 4 ) {
                             ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        } else if ( cv == has_single && used[cv] < 1 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
                         }
                     }
                 }
             }
-        }
 
+            // Check full house
+            if ( ret_vals.length == 0 && table_pattern <= 17 ) {
+
+                let has_tripplet = -1;
+                let has_pair = -1;  
+                let table_main_key = -1;    
+
+                for ( let key in table_stat ) {
+                    let int_key = parseInt( key )
+                    if ( table_stat[key] >= 3) {
+                        table_main_key = int_key;
+                        break
+                    }
+                }
+
+                for ( let key in your_stat ) {
+                    let int_key = parseInt(key);
+                    if ( your_stat[key] >= 3 && int_key > table_main_key ) {
+                        if ( has_tripplet == -1 ) {
+                            has_tripplet = int_key;
+                        } else if ( int_key > has_tripplet ) {
+                            has_pair = has_tripplet
+                            has_tripplet = int_key
+                        }
+                    } else if ( your_stat[key] >= 2 && has_pair == -1 ) {
+                        has_pair = int_key;
+                    }
+                }
+
+                if ( has_tripplet > -1 && has_pair > -1 ) {
+                    let used = {};
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        let cv = this.card_val( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == has_tripplet && used[cv] < 3 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        } else if ( cv == has_pair && used[cv] < 2 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        }
+                    }
+                }
+            }
+            
+        
+        }
+        
         // The vals of selected cards in array
         return ret_vals;
     }
+
+
+
 
     //-------------
     dumb_AI_for_lead_round( h ) {
@@ -1178,167 +996,174 @@ export class Doudizhu extends Entity implements ISystem {
             this.safe_incr( your_stat , cardval , 1 );
         }
 
-        for ( let key in your_stat ) {
-            
-            let int_key = parseInt(key);
-            let seq_1_length = 1;
-            let seq_2_length = 0;
-            let seq_3_length = 0;
 
-            if ( your_stat[int_key] >= 3 ) {
-                seq_3_length = 1;
-            }
-            if ( your_stat[int_key] >= 2 ) {
-                seq_2_length = 1;
-            }
+        
 
-            if ( seq_3_length == 1 ) {
-                for ( let i = 1 ; i < this.players_deck[h].length ; i++ ) {
-                    if ( your_stat[ int_key + i ] >= 3 && (int_key + i) < 13 ) {
-                        seq_3_length += 1;
-                    } else {
-                        break;
-                    }
-                }
-            }
-            
-            if ( seq_2_length == 1 ) {
-                for ( let i = 1 ; i < this.players_deck[h].length ; i++ ) {
-                    if ( your_stat[ int_key + i ] >= 2 && (int_key + i) < 13 ) {
-                        seq_2_length += 1;
-                    } else {
-                        break;
-                    }
-                }
-            }
-                
-            for ( let i = 1 ; i < this.players_deck[h].length ; i++ ) {
-                if ( your_stat[ int_key + i ] >= 1 && (int_key + i) < 13 ) {
-                    seq_1_length += 1;
-                } else {
-                    break;
-                }
-            }
-
-
-
-
-            if ( seq_3_length > 0 ) {
-
-                // Check can do airplane or not.. 
-                let attached_pairs = [];
-                let attached_singles = [];
-                let single_count = 0;
-                let pair_count = 0;
-
-                for ( let key2 in your_stat ) {
-                    let int_key2 = parseInt(key2);
-                    if ( your_stat[key2] == 2 && int_key2 < 13 && attached_pairs.length < seq_3_length) {
-                        pair_count += 1;
-                        attached_pairs.push( int_key2 );
-
-                    } else if ( your_stat[key2] == 1 && int_key2 < 13 && attached_singles.length < seq_3_length ) {
-                        single_count += 1;
-                        attached_singles.push( int_key2 );
-                    }
-                }
-
-                let attach_pair_or_single = 0;
-                
-                if ( single_count >= seq_3_length ) {
-                    // Get rid of singles first
-                    attach_pair_or_single = 1;
-
-                } else if ( single_count >= seq_3_length - 1 && seq_3_length >= 2 ) {
-
-                    attach_pair_or_single = 1;
-                    seq_3_length -= 1;
-
-                } else if ( single_count >= seq_3_length - 2 && seq_3_length >= 3 ) {
-
-                    attach_pair_or_single = 1;
-                    seq_3_length -= 2;
-                
-                } else if ( single_count >= seq_3_length - 4 && seq_3_length >= 4 ) {
-
-                    attach_pair_or_single = 1;
-                    seq_3_length -= 3;
-
-                } else if ( pair_count >= seq_3_length ) {
-                    // Then pairs
-                    attach_pair_or_single = 2;
-
-                } else if ( pair_count >= seq_3_length - 1 && seq_3_length >= 2 ) {
-                    // Then pairs
-                    attach_pair_or_single = 2;
-                    seq_3_length -= 1;
-                } else if ( pair_count >= seq_3_length - 2 && seq_3_length >= 3 ) {
-                    // Then pairs
-                    attach_pair_or_single = 2;
-                    seq_3_length -= 2;
-                } else if ( pair_count >= seq_3_length - 3 && seq_3_length >= 4 ) {
-                    // Then pairs
-                    attach_pair_or_single = 2;
-                    seq_3_length -= 3;
-    
-                }
-                
-
-                let used = {};
-                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                
-                    let cv = this.card_val( this.players_deck[h][i] );
-                    this.safe_incr( used, cv , 0 );
-                    if ( cv >= int_key  && cv <= int_key + seq_3_length - 1 && used[cv] < 3 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    } else if ( attached_singles.indexOf(cv) > -1 && attach_pair_or_single == 1 && used[cv] < 1 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    } else if ( attached_pairs.indexOf(cv) > -1 && attach_pair_or_single == 2 && used[cv] < 2 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    }
-                }
-                // Airplane or sequence_tripplet, doesn't matter will do it.
-                break;
-            
-            
-            } else if ( seq_2_length >= 3 ) {
-                
-                let used = {};
-                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                    let cv = this.card_val( this.players_deck[h][i] );
-                    this.safe_incr( used, cv , 0 );
-                    if ( cv >= int_key  && cv <= int_key + seq_2_length - 1 && used[cv] < 2 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    }
-                }
-                break;
-
-            } else if ( seq_1_length >= 5 ) {
-
-                let used = {};
-                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
-                    let cv = this.card_val( this.players_deck[h][i] );
-                    this.safe_incr( used, cv , 0 );
-                    if ( cv >= int_key  && cv <= int_key + seq_1_length - 1 && used[cv] < 1 ) {
-                        ret_vals.push( this.players_deck[h][i] );
-                        this.safe_incr( used, cv , 1 );
-                    }
-                }
-                break;
-            }
-
-
-            //console.log( this.translate2(key), "seq_1_length", seq_1_length , "seq_2_length", seq_2_length , "seq_3_length", seq_3_length);
-        }
-
+        
+        // Got any quad
         if ( ret_vals.length == 0 ) {
             for ( let key in your_stat ) {
                 let int_key = parseInt(key);
-                if ( your_stat[key] == 2 && int_key < 13 ) {
+                if ( your_stat[key] == 4  ) {
+                    let used = {};
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        let cv = this.card_val( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == int_key && used[cv] < 4 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        
+
+
+
+        // Check full house
+        if ( ret_vals.length == 0  ) {
+
+            let has_tripplet = -1;
+            let has_pair = -1;  
+            
+            for ( let key in your_stat ) {
+                let int_key = parseInt(key);
+                if ( your_stat[key] >= 3  ) {
+                    if ( has_tripplet == -1 ) {
+                        has_tripplet = int_key;
+                    } else if ( int_key > has_tripplet ) {
+                        has_pair = has_tripplet
+                        has_tripplet = int_key
+                    }
+                } else if ( your_stat[key] >= 2 && has_pair == -1 ) {
+                    has_pair = int_key;
+                }
+            }
+
+            if ( has_tripplet > -1 && has_pair > -1 ) {
+                let used = {};
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                    let cv = this.card_val( this.players_deck[h][i] );
+                    this.safe_incr( used, cv , 0 );
+                    if ( cv == has_tripplet && used[cv] < 3 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 1 );
+                    } else if ( cv == has_pair && used[cv] < 2 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 1 );
+                    }
+                }
+            }
+        }
+
+
+        // Got any tripples 
+        if ( ret_vals.length == 0 ) {
+            for ( let key in your_stat ) {
+                let int_key = parseInt(key);
+                if ( your_stat[key] == 3  ) {
+                    let used = {};
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        let cv = this.card_val( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == int_key && used[cv] < 3 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Got any flush?
+        if ( ret_vals.length == 0 ) {
+            let your_suit_stat = {}
+            let your_main_suit = -1;
+            for ( let i = 0 ; i < this.players_deck[h].length ; i++) {
+                let cardsuit = this.card_suit( this.players_deck[h][i] );
+                this.safe_incr( your_suit_stat , cardsuit , 1 );
+            }
+            for ( let key in your_suit_stat ) {
+                if ( your_suit_stat[key] >= 5 ) {
+                    let your_main_suit = key;
+                    break;
+                }
+            }
+            if ( your_main_suit > -1) {
+                let used = {};
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                    let cs = this.card_suit( this.players_deck[h][i] );
+                    this.safe_incr( used, cs , 0 );
+                    if ( cs == your_main_suit && used[cs] < 5 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cs , 1 );
+                    }
+                }
+            }
+        }
+
+
+        // Got any straight ? 
+        if ( ret_vals.length == 0 ) {
+
+            let valid_cardvals = [];
+
+            for ( let key in your_stat ) {
+                
+                let int_key = parseInt(key)
+
+                if ( your_stat[key] >= 1 && 
+                     your_stat[int_key+1] >= 1 && 
+                     your_stat[int_key+2] >= 1 && 
+                     your_stat[int_key+3] >= 1 && 
+                     your_stat[int_key+4] >= 1  ) {
+                   
+                    valid_cardvals = [ int_key, int_key+1, int_key+2, int_key+3, int_key+4 ]
+
+                } else if ( 
+                    your_stat[1] >= 1 &&
+                    your_stat[2] >= 1 && 
+                    your_stat[3] >= 1 && 
+                    your_stat[4] >= 1 && 
+                    your_stat[13] >= 1  ) {
+
+                    valid_cardvals = [ 1,2,3,4, 13 ]
+                
+                } else if ( 
+                    your_stat[1] >= 1 &&
+                    your_stat[2] >= 1 && 
+                    your_stat[3] >= 1 && 
+                    your_stat[12] >= 1 && 
+                    your_stat[13] >= 1  ) {
+
+                    valid_cardvals = [ 1,2,3, 12, 13 ]
+                }
+                
+            }
+
+            if ( valid_cardvals.length > 0 ) {
+                let used = {};
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                    let cv = this.card_val( this.players_deck[h][i] );
+                    this.safe_incr( used, cv , 0 );
+                    if ( valid_cardvals.indexOf(cv) > -1 && used[cv] < 1 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 1 );
+                    }
+                }
+            } 
+        }
+
+        
+        // Got any pair
+        if ( ret_vals.length == 0 ) {
+            for ( let key in your_stat ) {
+                let int_key = parseInt(key);
+                if ( your_stat[key] == 2  ) {
 
                     let used = {};
                     for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
@@ -1354,8 +1179,9 @@ export class Doudizhu extends Entity implements ISystem {
             }
         }
 
-
+        // Remaining singles
         if ( ret_vals.length == 0 ) {
+
             for ( let key in your_stat ) {
                 let int_key = parseInt(key);
                 if ( your_stat[key] == 1  ) {
@@ -1376,8 +1202,242 @@ export class Doudizhu extends Entity implements ISystem {
             ret_vals.push( this.players_deck[h][0] );
         }
 
+        
         return ret_vals;
     }
+    
+    
+    //-------------
+    dumb_AI_for_open_round( h ) {
+        
+        let ret_vals = [];
+
+        let your_stat = {}
+        for ( let i = 0 ; i < this.players_deck[h].length ; i++) {
+            let cardval = this.card_val( this.players_deck[h][i] );
+            this.safe_incr( your_stat , cardval , 1 );
+        }
+        
+        
+        // Got any quad
+        if ( ret_vals.length == 0 ) {
+            for ( let key in your_stat ) {
+                let int_key = parseInt(key);
+                if ( your_stat[key] == 4  && int_key == 1 ) {
+                    let used = {};
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        let cv = this.card_val( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == int_key && used[cv] < 4 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        
+
+
+        // Check full house
+        if ( ret_vals.length == 0  ) {
+
+            let has_tripplet = -1;
+            let has_pair = -1;  
+            
+            if (your_stat[1] == 3 ) {
+                has_tripplet = 1;
+            } else if ( your_stat[1] == 2 ) {
+                has_pair = 1;
+            }
+            
+            if ( has_tripplet != -1 ) {
+                for ( let key in your_stat ) {
+                    let int_key = parseInt(key);
+                    if ( your_stat[key] == 2 && int_key != has_tripplet) {
+                        has_pair = int_key;
+                        break;
+                    }
+                }
+            }
+            if ( has_pair != -1 ) {
+                for ( let key in your_stat ) {
+                    let int_key = parseInt(key);
+                    if ( your_stat[key] >= 3 ) {
+                        has_tripplet = int_key;
+                        break;
+                    }
+                }
+            }   
+
+
+            if ( has_tripplet > -1 && has_pair > -1 ) {
+                let used = {};
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                    let cv = this.card_val( this.players_deck[h][i] );
+                    this.safe_incr( used, cv , 0 );
+                    if ( cv == has_tripplet && used[cv] < 3 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 1 );
+                    } else if ( cv == has_pair && used[cv] < 2 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 1 );
+                    }
+                }
+            }
+        }
+
+
+        // Got any tripples 
+        if ( ret_vals.length == 0 ) {
+            for ( let key in your_stat ) {
+                let int_key = parseInt(key);
+                if ( your_stat[key] == 3  && int_key == 1 ) {
+                    let used = {};
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        let cv = this.card_val( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == int_key && used[cv] < 3 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Got any flush?
+        if ( ret_vals.length == 0 ) {
+            
+            let your_suit_stat = {}
+            let your_main_suit = -1;
+
+            for ( let i = 0 ; i < this.players_deck[h].length ; i++) {
+                let cardsuit = this.card_suit( this.players_deck[h][i] );
+                this.safe_incr( your_suit_stat , cardsuit , 1 );
+            }
+
+            
+            for ( let key in your_suit_stat ) {
+                let int_key = parseInt( key )
+                if ( your_suit_stat[key] >= 5 && int_key == 0 ) {
+                    your_main_suit = int_key;
+                    break;
+                }
+            }
+
+            if ( your_main_suit > -1) {
+                let used = {};
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                    
+                    let cs = this.card_suit( this.players_deck[h][i] );
+                    let csv = this.card_suit_val( this.players_deck[h][i] );
+
+                    this.safe_incr( used, cs , 0 );
+                    if ( csv == 4 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                    } else if ( cs == your_main_suit && used[cs] < 5 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cs , 1 );
+                    }
+                }
+            }
+        }
+
+
+        // Got any straight ? 
+        if ( ret_vals.length == 0 ) {
+
+            
+            let impossible = 0;
+            // Make sure 3,4,5 is avai
+            for ( let i = 1 ; i <= 3 ; i++ ) {
+                if ( your_stat[i] >= 1  ) {
+                } else {
+                    impossible = 1;
+                    break;
+                }
+            }
+            let valid_cardvals = [];
+
+            if ( impossible == 0) {
+                
+                // Then it could be 3,4,5 + 6,7
+                if ( your_stat[4] == 1 && your_stat[5] == 1 ) {
+                    valid_cardvals = [ 2,3,4,5]
+
+                } else if ( your_stat[4] == 1 && your_stat[13] == 1 ) {
+                    // 3,4,5 + 6,2
+                    valid_cardvals = [ 2,3,4, 13]
+                } else if ( your_stat[12] == 1 && your_stat[13] == 1 ) {
+                    // 3,4,5, + A,2
+                    valid_cardvals = [ 2,3, 12,13]
+                }
+            }
+            
+            if ( valid_cardvals.length > 0 ) {
+                let used = {};
+                for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+
+                    let cv = this.card_val( this.players_deck[h][i] );
+                    let csv = this.card_suit_val( this.players_deck[h][i] );
+                    this.safe_incr( used, cv , 0 );
+
+                    if ( csv == 4 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                    } else if ( valid_cardvals.indexOf(cv) > -1 && used[cv] < 1 ) {
+                        ret_vals.push( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 1 );
+                    }
+                }
+            } 
+        }
+
+        
+        // Got any pair
+        if ( ret_vals.length == 0 ) {
+            for ( let key in your_stat ) {
+                let int_key = parseInt(key);
+                if ( your_stat[key] == 2 && int_key == 1 ) {
+
+                    let used = {};
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        let cv = this.card_val( this.players_deck[h][i] );
+                        this.safe_incr( used, cv , 0 );
+                        if ( cv == int_key && used[cv] < 2 ) {
+                            ret_vals.push( this.players_deck[h][i] );
+                            this.safe_incr( used, cv , 1 );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Remaining singles
+        if ( ret_vals.length == 0 ) {
+
+            for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                let csv = this.card_suit_val( this.players_deck[h][i] );
+                if ( csv == 4 ) {
+                    ret_vals.push( this.players_deck[h][i] );
+                } 
+            }
+        }
+
+        // Super last resort
+        if ( ret_vals.length == 0 ) {
+            ret_vals.push( this.players_deck[h][0] );
+        }
+
+        
+        return ret_vals;
+    }
+
+
     
     
 
@@ -1431,7 +1491,7 @@ export class Doudizhu extends Entity implements ISystem {
 
         this.round_actions[ this.whose_turn ] = 4;
         this.togglePointer( this.whose_turn , 0 );
-        this.whose_turn = (this.whose_turn + 1) % 3;
+        this.whose_turn = (this.whose_turn + 1) % 4;
         this.anim_dealing = 6;
 
         let rand = (Math.random() * 2) >> 0;
@@ -1457,13 +1517,17 @@ export class Doudizhu extends Entity implements ISystem {
         log("Selected vals are: ", selected_vals );
 
         let pattern = this.check_pattern( selected_vals );
+
+        if ( selected_vals.indexOf(1) == -1 && this.new_round_diamond_3_out == 0 ) {
+            this.displayAnnouncement( "First Turn must use Three of Diamond.", 3, Color4.Yellow(), 14, false );
+            return ;
+        }
+
         if ( pattern  > -1 ) {
             
             if ( this.compare_pattern( selected_vals , this.last_discarded_vals ) > 0  ) {
                 
-                if ( pattern == 22 || pattern == 21 ) {
-                    this.bomb_or_rocket += 1;
-                }
+                
 
                 for ( let i = selected_indices.length - 1 ; i >= 0 ; i-- ) {
 
@@ -1483,7 +1547,7 @@ export class Doudizhu extends Entity implements ISystem {
                     mpiece.getComponent(Transform).position.y = this.players_discarded_pos[ h ][ i ].y;
                     mpiece.getComponent(Transform).position.z = this.players_discarded_pos[ h ][ i ].z;
 
-                    mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 , [ 0, -90, 90 ][ h ], 0);
+                    mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 , -90 * h, 0);
 
                     
                 }
@@ -1492,6 +1556,7 @@ export class Doudizhu extends Entity implements ISystem {
 
                 this.clear_buttons();
                 this.clear_round_actions();
+                this.new_round_diamond_3_out = 1;
 
                 if ( this.players_deck[h].length == 0 ) {
                     this.do_win(); 
@@ -1501,7 +1566,7 @@ export class Doudizhu extends Entity implements ISystem {
                     this.last_discarded_side = this.whose_turn;
 
                     this.togglePointer( this.whose_turn , 0 );
-                    this.whose_turn = (this.whose_turn + 1) % 3;
+                    this.whose_turn = (this.whose_turn + 1) % 4;
                     this.anim_dealing = 6;
                 }
             } else {
@@ -1523,27 +1588,44 @@ export class Doudizhu extends Entity implements ISystem {
         this.whose_turn = -1;
         this.gameover = 1;
         
+        let total = 0;
+        let penalties = [];
+
+        for ( let h = 0 ; h < 4 ; h++ ) {
+
+            let sum = 0;
+
+            if ( h == action_owner ) {
+                // Winner
+                
+            } else {     
+                // Losers        
+                
+                if ( this.players_deck[h].length == 13 ) {
+                    // all 13 card still at hand
+                    sum += 39
+
+                } else {
+                    for ( let i = 0 ; i < this.players_deck[h].length ; i++ ) {
+                        if ( this.card_val( this.players_deck[h][i] ) <= 7 ) {
+                            sum += 1;
+                        } else {
+                            sum += 2;
+                        }
+                    }
+                }
+                total += sum;
+                penalties[h] = sum;
+            }
+        }
+
+
         let str = [];
-        str[0] = "Winner is : " + this.display_names[  action_owner  ] + (( this.landlord == action_owner ) ? "(Landlord)":"(Farmer)") + "\n\n"
+        str[0] = "Winner is : " + this.display_names[  action_owner  ]  + "\n\n"
         str[1] = "\n\n"
         str[2] = "\n\n"
         
-        let base = this.curbid;
-
-
-        str[0] += "\nBase Point:";
-        str[1] += "\n" + this.curbid
-        str[2] += "\n";
         
-        str[0] += "\nBombs or Rocket used:";
-        str[1] += "\n" + this.bomb_or_rocket
-        str[2] += "\n";
-        
-        str[0] += "\nMultiplier:";
-        str[1] += "\n" + ( 1 << this.bomb_or_rocket ) 
-        str[2] += "\n";
-        
-        let total = this.curbid * ( 1 << this.bomb_or_rocket );
         
         str[0] += "\n\nTotal:";
         str[1] += "\n\n" + total
@@ -1557,37 +1639,22 @@ export class Doudizhu extends Entity implements ISystem {
         for ( let i = 0 ; i < 3 ; i++) {
             str[i] += "---------\n";
         }
-        for ( let h = 0 ; h < 3 ; h++ ) {
+        for ( let h = 0 ; h < 4 ; h++ ) {
 
-            let is_winner = 0;
-            if ( action_owner == this.landlord && h == this.landlord) {
-                is_winner = 1;
-            } else if ( action_owner != this.landlord && h != this.landlord ) {
-                is_winner = 1;
-            }
-
-            if ( is_winner == 1 ) {
+            if ( h == action_owner ) {
                 // Winner
-                if ( this.landlord == h ) {
-                    this.final_scores[h] += total * 2;
-                    str[1] +=  ( total * 2 )  + "\n"
-                } else {
-                    this.final_scores[h] += total;
-                    str[1] +=  ( total )  + "\n"
-                }
+                this.final_scores[h] += total ;
+                str[1] +=  ( total )  + "\n"
+                
             } else {     
                 // Losers        
-                if ( this.landlord == h ) {    
-                    this.final_scores[h] -= total * 2;
-                    str[1] +=  "-" + ( total * 2 )  + "\n"
-                } else {
-                    this.final_scores[h] -= total;
-                    str[1] +=  "-" + ( total )  + "\n"
-                }
+                this.final_scores[h] -= penalties[h] ;
+                str[1] +=  "-" + ( penalties[h] )  + "\n"
+                
             }
             
-            str[0] +=  this.display_names[h] + " " + (( this.landlord == h ) ? "(Landlord)":"(Farmer)") + "\n"
-            str[2] +=  this.final_scores[h] + "\n"                
+            str[0] +=  this.display_names[h] + "\n"
+            str[2] +=  this.final_scores[h]  + "\n"                
         }
 
         for ( let i = 0 ; i < 3 ; i++) {
@@ -1598,7 +1665,7 @@ export class Doudizhu extends Entity implements ISystem {
         this.show_hand();
 
         this.ui_root.visible = true;
-        this.stage.on_score_updated( this.final_scores , this.game_mode , this.round , "doudizhu" , this.my_seat_id );
+        this.stage.on_score_updated( this.final_scores , this.game_mode , this.round , "bigtwo" , this.my_seat_id );
         this.buttons["deal"].show();
     
     }
@@ -1610,7 +1677,7 @@ export class Doudizhu extends Entity implements ISystem {
     init_deck() {
 
         this.deck.length = 0;
-        for ( let i = 0 ; i < 54 ; i++ ) {
+        for ( let i = 0 ; i < 52 ; i++ ) {
             this.deck.push( i );
         }
         this.shuffleArray( this.deck );
@@ -1649,14 +1716,7 @@ export class Doudizhu extends Entity implements ISystem {
         this.display_names[0] = this.userData.displayName;
         this.display_names[1] = "Bot_Becky#0002"
         this.display_names[2] = "Bot_Charlie#0003"
-
-        /*
-        this.curbid = 2;
-        this.bomb_or_rocket =3;
-        this.landlord = 1;
-        this.whose_turn = 1;
-        this.do_win();
-        */
+        this.display_names[3] = "Bot_Donald#0004"
         
     }
 
@@ -1669,23 +1729,23 @@ export class Doudizhu extends Entity implements ISystem {
         // + 0 - 0
         // 0 + 0 -
         
-        let xs_concealed        = [  -6.5, 14.5,    -14.5 ];
-        let zs_concealed        = [ -14.5, -6.5,     6.5 ];
+        let xs_concealed        = [  -6.5, 14.5,   6.5   ,   -14.5 ];
+        let zs_concealed        = [ -14.5, -6.5,  14.5   ,    6.5 ];
 
-        let xdeltas_concealed   = [   0.8,    0,     0  ];
-        let zdeltas_concealed   = [     0,  0.8,    -0.8  ];
+        let xdeltas_concealed   = [   0.8,    0,   -0.8,     0  ];
+        let zdeltas_concealed   = [     0,  0.8,      0,  -0.8  ];
         
-        let xs_discarded        = [    -4,    6,       -6  ];
-        let zs_discarded        = [    -6,   -4,        4  ];
+        let xs_discarded        = [    -4,    6,   4,    -6  ];
+        let zs_discarded        = [    -6,   -4,   6,     4  ];
 
-        let xdeltas_discarded   = [   0.8,  1.5,      -1.5  ];
-        let zdeltas_discarded   = [  -1.5,  0.8,      -0.8  ];
+        let xdeltas_discarded   = [   0.8,  1.5,  0.8,    -1.5  ];
+        let zdeltas_discarded   = [  -1.5,  0.8,  1.5,    -0.8  ];
         
         
-        for ( let h = 0 ; h < 3 ; h++) {
+        for ( let h = 0 ; h < 4 ; h++) {
 
             // The concealed pos
-            for ( let i = 0 ; i < 20 ; i++) {
+            for ( let i = 0 ; i < 13 ; i++) {
 
                 let x = xs_concealed[h] + i * xdeltas_concealed[h]; 
                 let y = i * 0.001 ;
@@ -1694,13 +1754,17 @@ export class Doudizhu extends Entity implements ISystem {
             }
             
             // The discarded pos
-            for ( let i = 0 ; i < 20 ; i++ ) {
+            for ( let i = 0 ; i < 13 ; i++ ) {
 
                 let x;
                 let y = i * 0.001;
                 let z;
-                
-                if ( h == 0) {
+
+                if ( h == 2 ) {
+                    y = i * -0.001;
+                }
+
+                if ( h % 2 == 0) {
                     x = xs_discarded[h] + (i % 20 ) * xdeltas_discarded[h];
                     z = zs_discarded[h] + ( (i / 20 ) >> 0 ) * zdeltas_discarded[h];
                 } else {
@@ -1733,6 +1797,7 @@ export class Doudizhu extends Entity implements ISystem {
         this.clear_round_actions();
         this.last_discarded_vals.length = 0;
         this.last_discarded_side = -1;
+        this.new_round_diamond_3_out = 0;
 
 
         this.ui_network_msg.value = "";
@@ -1740,9 +1805,7 @@ export class Doudizhu extends Entity implements ISystem {
 
         
         this.gameover = 0;
-        this.curbid = 0;
-        this.bomb_or_rocket = 0;
-        
+
         if ( this.game_mode == 1 ) {
             // Wait for server. Server is waiting for 4 ppl to click play.
             this.displayAnnouncement( "Please wait for others to click play...", 5, Color4.Yellow(), 14, false );
@@ -1753,8 +1816,8 @@ export class Doudizhu extends Entity implements ISystem {
 
 
             // Insert card into players deck from the public deck.
-            for ( let h = 0 ; h < 3 ; h++) {
-                for ( let i = 0 ; i < 17 ; i++ ) {
+            for ( let h = 0 ; h < 4 ; h++) {
+                for ( let i = 0 ; i < 13 ; i++ ) {
                     this.players_deck[h].push( this.deck.shift() );
                 }
             }
@@ -1768,21 +1831,7 @@ export class Doudizhu extends Entity implements ISystem {
     }
 
 
-    //---------------------
-    // AI function 1:  Decide what to do based on doaction.
-    NPC_decide_pre_round_bid( h  ) {
-
-        this.sort_player_tile( this.whose_turn ); 
-
-        let remaining_choice = 3 - this.curbid + 1;
-        let rand_decision = ( Math.random() * remaining_choice ) >> 0;
-        
-        if ( rand_decision == 0 ) {
-            this.do_bid( h , 0);   
-        } else {
-            this.do_bid( h, rand_decision + this.curbid );
-        }
-    }
+    
 
     //-------------------
     NPC_decide_discard( h ) {
@@ -1791,7 +1840,16 @@ export class Doudizhu extends Entity implements ISystem {
             
             // Leader
             this.unselect_all( h );
-            let ai_selected_vals = this.dumb_AI_for_lead_round( h )
+
+            log( "NPC_decide_discard (Lead)", this.players_deck[h] );
+
+            let ai_selected_vals ;
+            if ( this.new_round_diamond_3_out == 0 ) {
+                ai_selected_vals = this.dumb_AI_for_open_round( h )
+                this.new_round_diamond_3_out = 1;
+            } else {
+                ai_selected_vals = this.dumb_AI_for_lead_round( h )
+            }
             for ( let i = 0 ; i < ai_selected_vals.length ; i++ ) {
                 let val = ai_selected_vals[i];
                 let idx = this.players_deck[h].indexOf( val );
@@ -1800,23 +1858,15 @@ export class Doudizhu extends Entity implements ISystem {
             this.do_submit(h);
         
         } else {
+            
+            log( "NPC_decide_discard (Defense)", this.players_deck[h] );
+            
             // Defen
             let do_pass_regardless = 0;
             let ret = this.do_hint(h);
 
             if ( ret > 0 ) {
-                if ( this.last_discarded_side != this.landlord && h != this.landlord ) {
-                    // Last discarded is from team mate. Try not to sabotage.
-                    if ( ret == 1) {
-                        this.do_submit(h);
-                    } else {
-                        this.do_pass(h);
-                    }
-                } else {
-                    this.do_submit(h);
-                }
-
-                
+                this.do_submit(h);
             }
         }
     }
@@ -1893,7 +1943,16 @@ export class Doudizhu extends Entity implements ISystem {
 
 
 
-
+    //--------
+    decide_who_start( ) {
+        // who has diamond 3 
+        for ( let h = 0 ; h < 4 ; h++ ) {
+            if ( this.players_deck[h].indexOf(1) > -1  ) {
+                this.whose_turn = h;
+                break;
+            }
+        }        
+    }
 
 
     //-----
@@ -1903,10 +1962,11 @@ export class Doudizhu extends Entity implements ISystem {
 
         
         if ( 
-            this.round_actions[(this.whose_turn + 1) % 3] == 4 && 
-            this.round_actions[(this.whose_turn + 2) % 3] == 4  
+            this.round_actions[(this.whose_turn + 1) % 4] == 4 && 
+            this.round_actions[(this.whose_turn + 2) % 4] == 4 &&
+            this.round_actions[(this.whose_turn + 3) % 4] == 4  
         ) {
-            // If both have passed. 
+            // If 3 ppl have passed. 
             this.last_discarded_vals.length = 0;
             this.last_discarded_side = -1;
 
@@ -1946,62 +2006,47 @@ export class Doudizhu extends Entity implements ISystem {
     //--------
     play_sound( pattern , selected_val ){
 
-        if ( pattern == 22 ) {
-            this.sounds["pair_15"].playOnce();
-            this.sounds["firework"].playOnce();
-            
-        } else if ( pattern == 21 ) {
-            this.sounds["quad_0"].playOnce();
-            this.sounds["explosion"].playOnce();
-            
-
-        } else if ( pattern == 20 ) {
+        if ( pattern == 11 ) {
             
             let val = this.card_val( selected_val[0])
             if ( val < 13 ) {
                 this.sounds["single_" + (val+2) ].playOnce();
-            } else if ( val == 13 ) {
+            } else if ( val == 13 ){
                 this.sounds["single_2"].playOnce();
-            } else if ( val >= 14) {
-                this.sounds["single_" + (val+1)].playOnce();
             }
-        } else if ( pattern == 19 ) {
+
+        } else if ( pattern == 12 ) {
             let val = this.card_val( selected_val[0])
             if ( val < 13 ) {
                 this.sounds["pair_" + (val+2) ].playOnce();
             } else if ( val == 13 ) {
-                this.sounds["pair_2"].playOnce();
-            } else if ( val >= 14) {
-                this.sounds["pair_15"].playOnce();
+                this.sounds["pair_2"  ].playOnce();
             }
 
-        } else if ( pattern <= 18 && this.last_discarded_vals.length > 0 ) {
-            this.sounds["greater"].playOnce();
-            
-        } else if ( pattern == 18 ) {
+        } else if ( pattern == 13 ) {
             this.sounds["tripplet_0"].playOnce();
-        } else if ( pattern == 17) {
-            this.sounds["tripplet_1"].playOnce();
-        } else if ( pattern == 16) {
-            this.sounds["tripplet_3"].playOnce();
-
+        
+        } else if ( pattern == 14 ) {
+            this.sounds["quad_3"].playOnce();
+        
         } else if ( pattern == 15 ) {
             this.sounds["straight_0"].playOnce();
-        } else if ( pattern == 14 ) {
-            this.sounds["straight_1"].playOnce();
-        } else if ( pattern == 13 ) {
-            this.sounds["straight_2"].playOnce();
-        } else if ( pattern == 12 ) {
+        
+        } else if ( pattern == 16 ) {
+            // Flush
+            this.sounds["straight_4"].playOnce();
+        
+        } else if ( pattern == 17 ) {
             this.sounds["tripplet_2"].playOnce();
-        } else if ( pattern == 9 ) {
-            this.sounds["tripplet_3"].playOnce();
-        } else if ( pattern == 11 ) {
-            this.sounds["quad_1"].playOnce();
-
-        } else if ( pattern == 12 ) {
-            this.sounds["quad_2"].playOnce();
+        
+        } else if ( pattern == 18 ) {
+            this.sounds["quad_3"].playOnce();
+        
+        } else if ( pattern == 19 ) {
+            this.sounds["straight_3"].playOnce();
+        
         }
-
+        
     }
 
      //-------
@@ -2020,32 +2065,13 @@ export class Doudizhu extends Entity implements ISystem {
         
 
     }
-    //-------
-    render_pre_round_bid_buttons() {
-
-        this.clear_buttons();
-        this.sort_player_tile( this.whose_turn ); 
-
-
-        this.buttons[ "bid_0" ].show();  
-        this.buttons[ "bid_0" ].getComponent(Transform).position.y = 0;
-
-        // Of all the doable actions, only render where owner is player 0.
-        let ii = 1;
-        for ( let i = this.curbid + 1 ; i <= 3 ; i++ ) {
-            this.buttons[ "bid_" + i ].show();  
-            this.buttons[ "bid_" + i  ].getComponent(Transform).position.y = ii * 1.65;
-            ii += 1;
-        }
-        
-    }
-
+    
 
     //------
     return_ents_to_walls() {
         
         // Return all piece entities to wall
-        for ( let h = 0 ; h < 3 ; h++) {
+        for ( let h = 0 ; h < 4 ; h++) {
             for ( let i = this.players_discarded_ent[h].length - 1 ; i >= 0 ; i-- ) {
                 this.wall_pieces_ent.push( this.players_discarded_ent[h].pop() );
             }
@@ -2116,10 +2142,10 @@ export class Doudizhu extends Entity implements ISystem {
 
     //---------
     show_hand() {
-        for ( let h = 0 ; h < 3; h++ ) {
+        for ( let h = 0 ; h < 4; h++ ) {
             for ( let i = 0 ; i <  this.players_concealed_ent[h].length ; i++) {
                let mpiece = this.players_concealed_ent[h][i];
-               mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90, [ 0, -90, 90 ][ h ], 0 ) ;
+               mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90, h * -90, 0 ) ;
             }
         }
     }
@@ -2168,9 +2194,9 @@ export class Doudizhu extends Entity implements ISystem {
             mpiece.getComponent(Transform).position.z = this.players_concealed_pos[player_h][i].z;
             
             if ( player_h == this.my_seat_id ) {
-                mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 , [ 0, -90, 90 ][ player_h ] , 0 );
+                mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 ,  player_h * -90 , 0 );
             } else {
-                mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( -90 , [ 0, -90, 90 ][ player_h ], 0 );
+                mpiece.getComponent(Transform).rotation.eulerAngles = new Vector3( -90 , player_h * -90, 0 );
             }
 
             this.setFaceVal( mpiece , val  );
@@ -2208,10 +2234,7 @@ export class Doudizhu extends Entity implements ISystem {
 
         log( "txclickable_button_onclick", id , userData );
 
-        if ( id.substr(0,3) == "bid") {
-            this.do_bid( this.whose_turn , parseInt( id.substr(4,1) ) );
-        
-        } else if ( id == "submit") {
+        if ( id == "submit") {
             this.do_submit( this.whose_turn );
         
         } else if ( id == "pass" ) {
@@ -2225,7 +2248,7 @@ export class Doudizhu extends Entity implements ISystem {
         if ( id == "deal") {
             this.new_round();
         } else if ( id == "help") {
-            openExternalURL("https://www.youtube.com/watch?v=HOWevyidlXk");
+            openExternalURL("https://www.youtube.com/watch?v=PouhpfTuYic");
         }
     }
     
@@ -2236,16 +2259,16 @@ export class Doudizhu extends Entity implements ISystem {
         if ( this.anim_dealing == 1 ) {
 
             let total_concealed_count = 0;
-            for ( let h = 0 ; h < 3 ; h++ ) {
+            for ( let h = 0 ; h < 4 ; h++ ) {
                 total_concealed_count += this.players_concealed_ent[h].length;
             }
-            if ( total_concealed_count < 51 ) {
+            if ( total_concealed_count < 52 ) {
 
                 // Change container
                 this.anim_piece = this.wall_pieces_ent.shift();
 
-                let player_h = total_concealed_count % 3;
-                let tile_i   = ( total_concealed_count / 3 ) >> 0; 
+                let player_h = total_concealed_count % 4;
+                let tile_i   = ( total_concealed_count / 4 ) >> 0; 
                 this.players_concealed_ent[player_h].push( this.anim_piece );
                 
                 this.anim_target.x = this.players_concealed_pos[player_h][tile_i].x;
@@ -2271,7 +2294,8 @@ export class Doudizhu extends Entity implements ISystem {
                     // Dont need to do anything, we will process colyseus transaction and know what to do.
 
                 } else {
-                    this.bid_round_procedure();
+                    this.decide_who_start();
+                    this.anim_dealing = 6;
                 }
             }
 
@@ -2307,86 +2331,9 @@ export class Doudizhu extends Entity implements ISystem {
                 this.anim_tick = 0;
                 this.anim_dealing = 0;
                 this.NPC_decide_discard( this.whose_turn  );
-            }
-
-        } else if ( this.anim_dealing == 4 ) {
-
-            let finished = -1;
-            let winner = -1;
-            let bidded_count = 0;
-            let highest_bid = 0;
-
-            log( "this.round_actions", this.round_actions );
-
-            for ( let i = 0 ; i < 3 ; i++) {
-
-                if ( this.round_actions[i] > -1) {
-                    bidded_count += 1;
-                    
-                    if ( this.round_actions[i] > highest_bid ) {
-                        highest_bid = this.round_actions[i];
-                        winner = i;
-                    }
-                    if ( this.round_actions[i] == 3 ) {
-                        finished = 1;
-                        winner = i;
-                        break;
-                    }
-                }
-            }
-            if ( bidded_count == 3 || finished > -1 ) {
                 
-                if ( winner == -1) {
-
-                    this.displayAnnouncement("No one bidded to become Land Lord, reshuffle... " , 5 , Color4.Yellow(), 14, false);
-                    this.anim_dealing = 7;
-
-                } else {
-                    
-                    this.landlord = winner;
-                    this.displayAnnouncement("LandLord role is given to " + this.display_names[winner] , 5 , Color4.Yellow(), 14, false);
-                    log( "Winner of auction is ", this.landlord);
-                    
-                    // 3 extra cards
-                    for ( let i = 0 ; i < 3 ; i++) {
-
-                        let card_val = this.deck.shift();
-                        let card_ent = this.wall_pieces_ent.shift()
-                        
-                        this.players_deck[ this.landlord ].push( card_val );
-                        this.players_concealed_ent[ this.landlord ].push( card_ent );
-                        this.setFaceVal( card_ent , card_val );
-
-                        let concealed_index = this.players_concealed_ent[ this.landlord ].length - 1;
-
-                        card_ent.getComponent(Transform).position.x = this.players_concealed_pos[ this.landlord ][ concealed_index ].x ;
-                        card_ent.getComponent(Transform).position.y = this.players_concealed_pos[ this.landlord ][ concealed_index ].y ;
-                        card_ent.getComponent(Transform).position.z = this.players_concealed_pos[ this.landlord ][ concealed_index ].z ;
-                        
-                        
-                        //if ( this.landlord == this.my_seat_id ) {
-                            card_ent.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 ,  [ 0, -90, 90 ][ this.landlord ] ,0);
-                        //} else {
-                        //    card_ent.getComponent(Transform).rotation.eulerAngles = new Vector3( -90 , [ 0, -90, 90 ][ this.landlord ], 0);
-                        //}
-                        
-                    }
-
-                    this.clear_round_actions();
-                    this.round_winner = this.landlord;
-                    this.whose_turn = this.landlord;
-                    this.anim_dealing = 6;
-                }
-            
-            } else {
-                this.bid_round_procedure();
             }
-            
-
-
-
-
-
+        
         }  else if ( this.anim_dealing == 5 ) { 
             
             this.anim_dealing = 0;
@@ -2433,9 +2380,9 @@ export class Doudizhu extends Entity implements ISystem {
                 let h = this.anim_piece["player"];
                 if ( this.anim_dealing == 2 ) {
                     if ( h == this.my_seat_id ) {
-                        this.anim_piece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 ,  [ 0, -90, 90 ][ h ] ,0);
+                        this.anim_piece.getComponent(Transform).rotation.eulerAngles = new Vector3( 90 ,  -90 * h ,0);
                     } else {
-                        this.anim_piece.getComponent(Transform).rotation.eulerAngles = new Vector3( -90 , [ 0, -90, 90 ][ h ], 0);
+                        this.anim_piece.getComponent(Transform).rotation.eulerAngles = new Vector3( -90 , -90 * h, 0);
                     }
 
                     this.sounds["card"].playOnce();
